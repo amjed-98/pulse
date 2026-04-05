@@ -30,11 +30,11 @@ export function Topbar({ user, onMenuClick }: TopbarProps) {
   const title = matched?.[1] ?? "Pulse";
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200/70 bg-white/85 px-4 py-4 backdrop-blur lg:px-8">
+    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-white/60 bg-white/72 px-4 py-4 backdrop-blur-xl lg:px-8">
       <div className="flex items-center gap-4">
         <button
           type="button"
-          className="flex size-11 items-center justify-center rounded-2xl border border-slate-200 text-slate-700 lg:hidden"
+          className="flex size-11 items-center justify-center rounded-2xl border border-[var(--color-border)] bg-white/85 text-slate-700 shadow-[var(--shadow-inset)] lg:hidden"
           onClick={onMenuClick}
           aria-label="Open sidebar"
         >
@@ -43,15 +43,15 @@ export function Topbar({ user, onMenuClick }: TopbarProps) {
           </svg>
         </button>
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.25em] text-slate-400">Workspace</p>
-          <h1 className="text-2xl font-semibold text-slate-950">{title}</h1>
+          <p className="section-kicker">Workspace</p>
+          <h1 className="text-[clamp(1.35rem,1.1rem+0.8vw,2rem)] font-semibold tracking-[-0.03em] text-slate-950">{title}</h1>
         </div>
       </div>
 
       <div className="flex items-center gap-3">
         <button
           type="button"
-          className="relative flex size-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-950"
+          className="relative flex size-11 items-center justify-center rounded-2xl border border-[var(--color-border)] bg-white/88 text-slate-600 shadow-[var(--shadow-inset)] transition hover:border-[var(--color-border-strong)] hover:text-slate-950"
           aria-label="Notifications"
         >
           <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.9">
@@ -64,7 +64,7 @@ export function Topbar({ user, onMenuClick }: TopbarProps) {
         <div className="relative">
           <button
             type="button"
-            className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-2 py-2 text-left transition hover:border-slate-300"
+            className="flex items-center gap-3 rounded-2xl border border-[var(--color-border)] bg-white/88 px-2 py-2 text-left shadow-[var(--shadow-inset)] transition hover:border-[var(--color-border-strong)]"
             onClick={() => setMenuOpen((open) => !open)}
           >
             <Avatar src={user.avatar_url} name={user.full_name} className="size-9" />
@@ -75,7 +75,7 @@ export function Topbar({ user, onMenuClick }: TopbarProps) {
           </button>
 
           {menuOpen ? (
-            <div className="absolute right-0 mt-3 w-52 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+            <div className="surface-card absolute right-0 mt-3 w-56 rounded-2xl p-2">
               <Link
                 href="/settings"
                 className="block rounded-xl px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-50 hover:text-slate-950"

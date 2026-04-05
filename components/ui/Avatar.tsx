@@ -11,7 +11,7 @@ export function Avatar({ src, alt, name, className }: AvatarProps) {
   return (
     <div
       className={cn(
-        "flex size-10 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-indigo-500 via-sky-500 to-cyan-400 text-sm font-semibold text-white",
+        "flex size-10 items-center justify-center overflow-hidden rounded-full border border-white/70 bg-gradient-to-br from-indigo-500 via-sky-500 to-cyan-400 text-sm font-semibold text-white shadow-[0_10px_24px_-16px_rgba(15,23,42,0.55)]",
         className,
       )}
     >

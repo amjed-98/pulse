@@ -33,13 +33,13 @@ class ChartErrorBoundary extends Component<{ children: ReactNode }, { hasError: 
 export function RevenueChart({ data }: RevenueChartProps) {
   return (
     <ChartErrorBoundary>
-      <div className="rounded-[1.75rem] border border-white/70 bg-white p-5 shadow-[var(--shadow-card)]">
+      <div className="surface-card rounded-[1.75rem] p-5">
         <div className="mb-6 flex items-start justify-between">
           <div>
             <h2 className="text-lg font-semibold text-slate-950">Revenue</h2>
             <p className="text-sm text-slate-500">Six-month trend across subscriptions and expansion revenue.</p>
           </div>
-          <div className="rounded-2xl bg-indigo-50 px-3 py-2 text-sm font-medium text-[var(--color-accent)]">
+          <div className="rounded-2xl bg-[linear-gradient(135deg,rgba(99,102,241,0.12),rgba(14,165,233,0.08))] px-3 py-2 text-sm font-semibold text-[var(--color-accent)] ring-1 ring-indigo-100">
             {formatCurrency(data[data.length - 1]?.revenue ?? 0)}
           </div>
         </div>

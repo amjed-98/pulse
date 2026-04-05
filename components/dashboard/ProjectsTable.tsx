@@ -29,7 +29,7 @@ export function ProjectsTable({ projects }: ProjectsTableProps) {
   });
 
   return (
-    <div className="overflow-hidden rounded-[1.75rem] border border-white/70 bg-white shadow-[var(--shadow-card)]">
+    <div className="surface-card overflow-hidden rounded-[1.75rem]">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
         <div>
           <h2 className="text-lg font-semibold text-slate-950">Project portfolio</h2>
@@ -57,7 +57,7 @@ export function ProjectsTable({ projects }: ProjectsTableProps) {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {sortedProjects.map((project) => (
-              <tr key={project.id} className="align-top">
+              <tr key={project.id} className="align-top transition hover:bg-slate-50/70">
                 <td className="px-5 py-4">
                   <Link href={`/projects/${project.id}`} className="font-medium text-slate-900 transition hover:text-[var(--color-accent)]">
                     {project.name}

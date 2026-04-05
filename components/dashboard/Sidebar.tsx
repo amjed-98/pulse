@@ -49,9 +49,9 @@ function SidebarContent({ user, onClose }: Omit<SidebarProps, "mobileOpen">) {
   const pathname = usePathname();
 
   return (
-    <aside className="flex h-full w-full flex-col bg-[var(--color-sidebar)] px-5 py-6 text-[var(--color-sidebar-foreground)]">
+    <aside className="flex h-full w-full flex-col bg-[linear-gradient(180deg,#0f172a_0%,#111c34_52%,#13213f_100%)] px-5 py-6 text-[var(--color-sidebar-foreground)]">
       <div className="mb-8 flex items-center gap-3">
-        <div className="flex size-11 items-center justify-center rounded-2xl bg-white/10 text-white">
+        <div className="flex size-11 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-white shadow-[0_14px_28px_-18px_rgba(14,165,233,0.45)]">
           <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M4 14c3.2 0 3.2-4 6.4-4 3.2 0 3.2 8 6.4 8 1.6 0 2.4-1 3.2-2" />
             <path d="M4 8c3.2 0 3.2-4 6.4-4 3.2 0 3.2 8 6.4 8 1.6 0 2.4-1 3.2-2" />
@@ -63,7 +63,7 @@ function SidebarContent({ user, onClose }: Omit<SidebarProps, "mobileOpen">) {
         </div>
       </div>
 
-      <nav className="space-y-1">
+      <nav className="space-y-1.5">
         {NAV_ITEMS.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
@@ -73,10 +73,10 @@ function SidebarContent({ user, onClose }: Omit<SidebarProps, "mobileOpen">) {
               href={item.href}
               onClick={onClose}
               className={cn(
-                "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition",
+                "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition duration-200",
                 active
-                  ? "bg-white/10 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
-                  : "text-[var(--color-sidebar-foreground)]/80 hover:bg-white/6 hover:text-white",
+                  ? "bg-[linear-gradient(135deg,rgba(99,102,241,0.42),rgba(14,165,233,0.18))] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08),0_18px_30px_-22px_rgba(79,70,229,0.8)]"
+                  : "text-[var(--color-sidebar-foreground)]/80 hover:bg-white/8 hover:text-white",
               )}
             >
               <Icon name={item.icon} className={active ? "text-white" : "text-[var(--color-sidebar-muted)]"} />
@@ -86,7 +86,7 @@ function SidebarContent({ user, onClose }: Omit<SidebarProps, "mobileOpen">) {
         })}
       </nav>
 
-      <div className="mt-auto rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
+      <div className="mt-auto rounded-[1.5rem] border border-white/10 bg-white/6 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
         <div className="mb-4 flex items-center gap-3">
           <Avatar src={user.avatar_url} name={user.full_name} className="size-11" />
           <div className="min-w-0">
@@ -95,7 +95,7 @@ function SidebarContent({ user, onClose }: Omit<SidebarProps, "mobileOpen">) {
           </div>
         </div>
         <form action={signOut}>
-          <Button type="submit" variant="secondary" className="w-full border-white/10 bg-white/10 text-white hover:bg-white/15">
+          <Button type="submit" variant="secondary" className="w-full border-white/12 bg-white/10 text-white hover:bg-white/15">
             Sign out
           </Button>
         </form>
@@ -108,7 +108,7 @@ export function Sidebar({ user, mobileOpen = false, onClose }: SidebarProps) {
   return (
     <>
       <div className="hidden h-screen w-72 shrink-0 lg:block">
-        <div className="fixed inset-y-0 left-0 w-72 border-r border-slate-900/10">
+        <div className="fixed inset-y-0 left-0 w-72 border-r border-slate-900/8 shadow-[18px_0_50px_-40px_rgba(15,23,42,0.45)]">
           <SidebarContent user={user} />
         </div>
       </div>

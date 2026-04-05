@@ -45,10 +45,11 @@ export function LoginForm() {
   });
 
   return (
-    <div className="w-full max-w-md space-y-6 rounded-[1.75rem] border border-white/70 bg-white/90 p-8 shadow-[var(--shadow-card)] backdrop-blur">
+    <div className="surface-card w-full max-w-md space-y-6 rounded-[1.75rem] p-8 backdrop-blur">
       <div className="space-y-2">
-        <h1 className="text-3xl font-semibold text-slate-950">Welcome back</h1>
-        <p className="text-sm text-slate-500">Sign in to manage analytics, projects, and team activity in Pulse.</p>
+        <p className="section-kicker">Sign in</p>
+        <h1 className="text-3xl font-semibold tracking-[-0.04em] text-slate-950">Welcome back</h1>
+        <p className="text-sm leading-7 text-slate-500">Sign in to manage analytics, projects, and team activity in Pulse.</p>
       </div>
 
       <form className="space-y-4" onSubmit={onSubmit}>
@@ -74,7 +75,7 @@ export function LoginForm() {
         </Button>
       </form>
 
-      <p className="text-sm text-slate-500">
+      <p className="border-t border-slate-100 pt-5 text-sm text-slate-500">
         New to Pulse?{" "}
         <Link href="/signup" className="font-medium text-[var(--color-accent)]">
           Create an account

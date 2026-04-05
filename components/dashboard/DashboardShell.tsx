@@ -19,7 +19,7 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
       <Sidebar user={user} mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
       <div className="min-w-0 flex-1">
         <Topbar user={user} onMenuClick={() => setMobileOpen(true)} />
-        <main className="px-4 py-6 lg:px-8 lg:py-8">{children}</main>
+        <main className="mx-auto w-full max-w-[1600px] px-4 py-6 lg:px-8 lg:py-8">{children}</main>
       </div>
     </div>
   );

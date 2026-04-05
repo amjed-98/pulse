@@ -62,14 +62,15 @@ export function SignupForm({ defaultEmail, showConfirmation }: SignupFormProps) 
 
   if (showConfirmation) {
     return (
-      <div className="w-full max-w-md space-y-5 rounded-[1.75rem] border border-white/70 bg-white/90 p-8 shadow-[var(--shadow-card)] backdrop-blur">
-        <div className="flex size-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+      <div className="surface-card w-full max-w-md space-y-5 rounded-[1.75rem] p-8 backdrop-blur">
+        <div className="flex size-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100">
           <svg viewBox="0 0 24 24" className="size-7" fill="none" stroke="currentColor" strokeWidth="1.8">
             <path d="M4 7h16v10H4z" />
             <path d="m4 8 8 6 8-6" />
           </svg>
         </div>
-      <div className="space-y-2">
+        <div className="space-y-2">
+          <p className="section-kicker">Verify email</p>
           <h1 className="text-3xl font-semibold text-slate-950">Check your email</h1>
           <p className="text-sm text-slate-500">
             We sent a confirmation link to <span className="font-medium text-slate-700">{defaultEmail}</span>.
@@ -87,10 +88,11 @@ export function SignupForm({ defaultEmail, showConfirmation }: SignupFormProps) 
   }
 
   return (
-    <div className="w-full max-w-md space-y-6 rounded-[1.75rem] border border-white/70 bg-white/90 p-8 shadow-[var(--shadow-card)] backdrop-blur">
+    <div className="surface-card w-full max-w-md space-y-6 rounded-[1.75rem] p-8 backdrop-blur">
       <div className="space-y-2">
-        <h1 className="text-3xl font-semibold text-slate-950">Create your workspace</h1>
-        <p className="text-sm text-slate-500">Start with a secure account and invite your team when you are ready.</p>
+        <p className="section-kicker">Get started</p>
+        <h1 className="text-3xl font-semibold tracking-[-0.04em] text-slate-950">Create your workspace</h1>
+        <p className="text-sm leading-7 text-slate-500">Start with a secure account and invite your team when you are ready.</p>
       </div>
 
       <form className="space-y-4" onSubmit={onSubmit}>
@@ -131,7 +133,7 @@ export function SignupForm({ defaultEmail, showConfirmation }: SignupFormProps) 
         </Button>
       </form>
 
-      <p className="text-sm text-slate-500">
+      <p className="border-t border-slate-100 pt-5 text-sm text-slate-500">
         Already have an account?{" "}
         <Link href="/login" className="font-medium text-[var(--color-accent)]">
           Sign in

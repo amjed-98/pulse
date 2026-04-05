@@ -43,13 +43,14 @@ function Icon({ icon }: Pick<StatCardProps, "icon">) {
 
 export function StatCard({ label, value, trend, trendDirection, icon }: StatCardProps) {
   return (
-    <div className="card-noise relative overflow-hidden rounded-[1.75rem] border border-white/70 bg-white p-5 shadow-[var(--shadow-card)]">
+    <div className="surface-card card-noise relative overflow-hidden rounded-[1.75rem] p-5">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo-200/80 to-transparent" />
       <div className="relative z-10 flex items-start justify-between gap-4">
         <div>
           <p className="text-sm text-slate-500">{label}</p>
-          <p className="mt-3 text-3xl font-semibold text-slate-950">{value}</p>
+          <p className="mt-3 text-[clamp(1.75rem,1.55rem+0.8vw,2.4rem)] font-semibold tracking-[-0.04em] text-slate-950">{value}</p>
         </div>
-        <div className="flex size-12 items-center justify-center rounded-2xl bg-indigo-50 text-[var(--color-accent)]">
+        <div className="flex size-12 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,rgba(99,102,241,0.12),rgba(14,165,233,0.08))] text-[var(--color-accent)] ring-1 ring-indigo-100">
           <Icon icon={icon} />
         </div>
       </div>

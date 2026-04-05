@@ -24,7 +24,7 @@ export default async function MarketingPage() {
       <div className="mx-auto max-w-7xl space-y-8">
         <header className="glass-panel flex items-center justify-between rounded-[2rem] border border-white/70 px-6 py-4 shadow-[var(--shadow-card)]">
           <div className="flex items-center gap-3">
-            <div className="flex size-11 items-center justify-center rounded-2xl bg-[var(--color-sidebar)] text-white">
+            <div className="flex size-11 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#0f172a_0%,#1e293b_100%)] text-white shadow-[0_18px_30px_-20px_rgba(15,23,42,0.65)]">
               <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M4 14c3.2 0 3.2-4 6.4-4 3.2 0 3.2 8 6.4 8 1.6 0 2.4-1 3.2-2" />
                 <path d="M4 8c3.2 0 3.2-4 6.4-4 3.2 0 3.2 8 6.4 8 1.6 0 2.4-1 3.2-2" />
@@ -36,7 +36,7 @@ export default async function MarketingPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Link href="/login" className="text-sm font-medium text-slate-600">
+            <Link href="/login" className="rounded-xl px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-white/70">
               Login
             </Link>
             <Link
@@ -48,13 +48,14 @@ export default async function MarketingPage() {
           </div>
         </header>
 
-        <section className="grid items-center gap-10 rounded-[2rem] border border-white/70 bg-white/80 px-6 py-10 shadow-[var(--shadow-card)] backdrop-blur lg:grid-cols-[1.1fr_0.9fr] lg:px-10 lg:py-12">
+        <section className="surface-card relative grid items-center gap-10 overflow-hidden rounded-[2rem] px-6 py-10 lg:grid-cols-[1.1fr_0.9fr] lg:px-10 lg:py-12">
+          <div className="pointer-events-none absolute inset-y-0 right-[-12%] w-[42%] rounded-full bg-[radial-gradient(circle,rgba(99,102,241,0.14)_0%,transparent_72%)] blur-3xl" />
           <div className="space-y-6">
-            <span className="inline-flex rounded-full bg-indigo-50 px-3 py-1 text-sm font-semibold text-[var(--color-accent)]">
+            <span className="inline-flex rounded-full border border-indigo-100 bg-indigo-50/90 px-3 py-1 text-sm font-semibold text-[var(--color-accent)]">
               Analytics and team operations, in one system
             </span>
             <div className="space-y-4">
-              <h1 className="max-w-xl text-5xl font-semibold tracking-tight text-slate-950 lg:text-6xl">
+              <h1 className="max-w-2xl text-[clamp(3.25rem,6vw,5.5rem)] font-semibold leading-[0.94] tracking-[-0.06em] text-slate-950">
                 Run projects, revenue, and team performance from a single command center.
               </h1>
               <p className="max-w-2xl text-lg leading-8 text-slate-600">
@@ -77,23 +78,24 @@ export default async function MarketingPage() {
               </Link>
             </div>
             <div className="grid gap-4 text-sm text-slate-500 sm:grid-cols-3">
-              <div>
-                <p className="text-2xl font-semibold text-slate-950">48K+</p>
+              <div className="rounded-[1.5rem] border border-white/70 bg-white/70 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
+                <p className="text-2xl font-semibold tracking-[-0.04em] text-slate-950">48K+</p>
                 <p>Monthly revenue tracked</p>
               </div>
-              <div>
-                <p className="text-2xl font-semibold text-slate-950">12</p>
+              <div className="rounded-[1.5rem] border border-white/70 bg-white/70 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
+                <p className="text-2xl font-semibold tracking-[-0.04em] text-slate-950">12</p>
                 <p>Active projects monitored</p>
               </div>
-              <div>
-                <p className="text-2xl font-semibold text-slate-950">94%</p>
+              <div className="rounded-[1.5rem] border border-white/70 bg-white/70 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
+                <p className="text-2xl font-semibold tracking-[-0.04em] text-slate-950">94%</p>
                 <p>Delivery completion rate</p>
               </div>
             </div>
           </div>
 
-          <div className="grid-surface rounded-[2rem] border border-slate-200 bg-slate-950 p-5">
-            <div className="rounded-[1.5rem] bg-slate-900 p-5 text-white shadow-2xl">
+          <div className="grid-surface relative rounded-[2rem] border border-slate-200/80 bg-[linear-gradient(180deg,#0f172a_0%,#111827_100%)] p-5 shadow-[0_50px_90px_-60px_rgba(15,23,42,0.8)]">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(14,165,233,0.14),transparent_36%)]" />
+            <div className="relative rounded-[1.5rem] border border-white/10 bg-slate-900/95 p-5 text-white shadow-2xl">
               <div className="mb-5 flex items-center justify-between">
                 <div>
                   <p className="text-sm text-slate-400">Pulse overview</p>
@@ -115,7 +117,7 @@ export default async function MarketingPage() {
                   <p className="mt-2 text-2xl font-semibold">8</p>
                 </div>
               </div>
-              <div className="space-y-3 rounded-[1.4rem] bg-white/5 p-4">
+              <div className="space-y-3 rounded-[1.4rem] border border-white/8 bg-white/5 p-4">
                 <div className="flex items-end gap-3">
                   {[28, 42, 36, 60, 54, 76].map((height) => (
                     <div key={height} className="flex flex-1 items-end gap-1">
@@ -141,8 +143,8 @@ export default async function MarketingPage() {
 
         <section className="grid gap-6 lg:grid-cols-3">
           {MARKETING_FEATURES.map((feature) => (
-            <article key={feature.title} className="rounded-[1.75rem] border border-white/70 bg-white/90 p-6 shadow-[var(--shadow-card)]">
-              <div className="mb-4 flex size-12 items-center justify-center rounded-2xl bg-indigo-50 text-[var(--color-accent)]">
+            <article key={feature.title} className="surface-card rounded-[1.75rem] p-6">
+              <div className="mb-4 flex size-12 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,rgba(99,102,241,0.12),rgba(14,165,233,0.08))] text-[var(--color-accent)] ring-1 ring-indigo-100">
                 <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <path d="M12 3 4 7v10l8 4 8-4V7Z" />
                   <path d="m4 7 8 4 8-4M12 11v10" />
@@ -154,11 +156,11 @@ export default async function MarketingPage() {
           ))}
         </section>
 
-        <section className="rounded-[2rem] border border-white/70 bg-white/90 p-6 shadow-[var(--shadow-card)] lg:p-8">
+        <section className="surface-card rounded-[2rem] p-6 lg:p-8">
           <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="text-sm font-medium uppercase tracking-[0.25em] text-slate-400">Pricing</p>
-              <h2 className="mt-2 text-3xl font-semibold text-slate-950">Simple plans for modern teams</h2>
+              <p className="section-kicker">Pricing</p>
+              <h2 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-slate-950">Simple plans for modern teams</h2>
             </div>
             <p className="max-w-xl text-sm leading-7 text-slate-500">
               This portfolio build includes a real auth flow, protected routes, server actions, and Supabase-backed
@@ -167,7 +169,7 @@ export default async function MarketingPage() {
           </div>
           <div className="grid gap-6 lg:grid-cols-2">
             {PRICING_TIERS.map((tier) => (
-              <article key={tier.name} className="rounded-[1.75rem] border border-slate-200 bg-slate-50/80 p-6">
+              <article key={tier.name} className="rounded-[1.75rem] border border-slate-200/90 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
                 <div className="mb-4 flex items-start justify-between">
                   <div>
                     <h3 className="text-2xl font-semibold text-slate-950">{tier.name}</h3>
