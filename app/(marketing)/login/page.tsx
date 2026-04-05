@@ -34,22 +34,7 @@ export default async function LoginPage({
                 fragmented tools.
               </p>
             </div>
-            <div className="surface-card grid gap-4 rounded-[1.8rem] p-5">
-              {[
-                "Server-rendered auth checks on protected routes",
-                "Analytics, project health, and team visibility in one place",
-                "Supabase-backed actions with RLS-ready data access",
-              ].map((item) => (
-                <div key={item} className="flex items-start gap-3 rounded-2xl bg-white/75 p-4">
-                  <span className="mt-0.5 flex size-7 items-center justify-center rounded-full bg-[var(--color-accent)] text-white">
-                    <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="m5 13 4 4L19 7" />
-                    </svg>
-                  </span>
-                  <p className="text-sm leading-6 text-slate-600">{item}</p>
-                </div>
-              ))}
-            </div>
+
           </div>
         </section>
 

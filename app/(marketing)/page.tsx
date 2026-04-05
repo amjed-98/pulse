@@ -66,7 +66,7 @@ export default async function MarketingPage() {
             <div className="flex flex-wrap gap-3">
               <Link
                 href="/signup"
-                className="inline-flex h-12 items-center justify-center rounded-xl bg-[var(--color-accent)] px-5 text-base font-medium text-white shadow-[var(--shadow-soft)] transition hover:bg-[var(--color-accent-strong)]"
+                className="inline-flex h-12 items-center justify-center rounded-xl bg-[var(--color-accent)] px-5 text-base font-medium !text-white shadow-[var(--shadow-soft)] transition hover:bg-[var(--color-accent-strong)]"
               >
                 Create workspace
               </Link>
