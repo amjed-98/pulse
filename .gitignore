@@ -5,3 +5,6 @@ node_modules
 tsconfig.tsbuildinfo
 pnpm-debug.log*
 supabase/.temp
+
+# Local Netlify folder
+.netlify

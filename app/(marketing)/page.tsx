@@ -41,7 +41,7 @@ export default async function MarketingPage() {
             </Link>
             <Link
               href="/signup"
-              className="inline-flex h-11 items-center justify-center rounded-xl bg-[var(--color-accent)] px-4 text-sm font-medium text-white shadow-[var(--shadow-soft)] transition hover:bg-[var(--color-accent-strong)]"
+              className="inline-flex h-11 items-center justify-center rounded-xl bg-[var(--color-accent)] px-4 text-sm font-medium !text-white shadow-[var(--shadow-soft)] transition hover:bg-[var(--color-accent-strong)]"
             >
               Start free
             </Link>
