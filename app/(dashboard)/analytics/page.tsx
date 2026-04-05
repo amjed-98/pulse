@@ -45,11 +45,10 @@ export default async function AnalyticsPage({
             <Link
               key={option}
               href={`/analytics?range=${option}`}
-              className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
-                range === option
-                  ? "bg-[var(--color-accent)] text-white shadow-[var(--shadow-soft)] hover:bg-[var(--color-accent-strong)]"
+              className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${range === option
+                  ? "bg-[var(--color-accent)] !text-white shadow-[var(--shadow-soft)] hover:bg-[var(--color-accent-strong)]"
                   : "border border-slate-300 bg-white text-slate-800 hover:border-slate-400 hover:bg-slate-50"
-              }`}
+                }`}
             >
               Last {option}d
             </Link>

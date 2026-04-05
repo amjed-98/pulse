@@ -42,11 +42,10 @@ export default async function ProjectsPage({
           <Link
             key={filter}
             href={filter === "all" ? "/projects" : `/projects?status=${filter}`}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
-              status === filter
-                ? "bg-[var(--color-accent)] text-white shadow-[var(--shadow-soft)] hover:bg-[var(--color-accent-strong)]"
-                : "border border-slate-300 bg-white text-slate-800 hover:border-slate-400 hover:bg-slate-50"
-            }`}
+            className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${status === filter
+              ? "bg-[var(--color-accent)] !text-white shadow-[var(--shadow-soft)] hover:bg-[var(--color-accent-strong)]"
+              : "border border-slate-300 bg-white text-slate-800 hover:border-slate-400 hover:bg-slate-50"
+              }`}
           >
             {filter === "all" ? "All" : filter}
           </Link>
