@@ -71,6 +71,32 @@ Important notes:
 - The app uses RLS as the primary data access control layer.
 - Auth session refresh is handled in `middleware.ts` via `@supabase/ssr`.
 
+### GitHub Actions Migration Pipeline
+
+The repository includes a dedicated GitHub Actions workflow at [.github/workflows/supabase-migrations.yml](/home/amjad/Desktop/projects/pulse/.github/workflows/supabase-migrations.yml).
+
+It does two things:
+
+- On pull requests touching `supabase/migrations/**`, it validates migration ordering and runs a local `supabase db reset --local`.
+- On pushes to `main` or manual dispatch, it pushes unapplied migrations to your remote Supabase database.
+
+Set these GitHub repository or environment secrets before enabling the deploy job:
+
+- `SUPABASE_PROJECT_REF`
+- `SUPABASE_DB_PASSWORD`
+- `SUPABASE_DB_URL` or `SUPABASE_ACCESS_TOKEN`
+
+Recommended setup:
+
+- Prefer `SUPABASE_DB_URL` with the exact Supabase session-pooler connection string for your production database.
+- If you prefer linked-project mode instead, set `SUPABASE_ACCESS_TOKEN` and `SUPABASE_PROJECT_REF`, and the workflow will use `supabase link` followed by `supabase db push --linked`.
+
+Example `SUPABASE_DB_URL` shape:
+
+```text
+postgresql://postgres.<project-ref>:YOUR_DB_PASSWORD@aws-REGION.pooler.supabase.com:5432/postgres
+```
+
 ## Scripts
 
 ```bash
