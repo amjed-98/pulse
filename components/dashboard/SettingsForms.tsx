@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useActionState, useEffect, useOptimistic, useState } from "react";
+import { startTransition, useActionState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -9,6 +9,7 @@ import { changePassword, deleteAccount, updateProfile } from "@/lib/actions/auth
 import type { ActionState, Profile } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { useToast } from "@/components/ui/ToastProvider";
 
 const profileSchema = z.object({
   fullName: z.string().min(2, "Full name must be at least 2 characters."),
@@ -27,17 +28,11 @@ const passwordSchema = z
 
 const initialState: ActionState = {};
 
-interface ToastState {
-  tone: "success" | "error" | "pending";
-  message: string;
-}
-
 export function SettingsForms({ profile }: { profile: Profile }) {
   const [profileState, profileAction, profilePending] = useActionState(updateProfile, initialState);
   const [passwordState, passwordAction, passwordPending] = useActionState(changePassword, initialState);
   const [deleteState, deleteAction, deletePending] = useActionState(deleteAccount, initialState);
-  const [toast, pushToast] = useOptimistic<ToastState | null, ToastState | null>(null, (_, value) => value);
-  const [resolvedToast, setResolvedToast] = useState<ToastState | null>(null);
+  const { showToast } = useToast();
 
   const {
     register: registerProfile,
@@ -68,12 +63,12 @@ export function SettingsForms({ profile }: { profile: Profile }) {
     const nextState = [profileState, passwordState, deleteState].find((state) => state.message);
 
     if (nextState?.message) {
-      setResolvedToast({
+      showToast({
         tone: nextState.success ? "success" : "error",
         message: nextState.message,
       });
     }
-  }, [deleteState, passwordState, profileState]);
+  }, [deleteState, passwordState, profileState, showToast]);
 
   return (
     <div className="space-y-6">
@@ -89,7 +84,7 @@ export function SettingsForms({ profile }: { profile: Profile }) {
             formData.set("fullName", values.fullName);
             formData.set("avatarUrl", values.avatarUrl);
             startTransition(() => {
-              pushToast({ tone: "pending", message: "Saving profile..." });
+              showToast({ tone: "pending", message: "Saving profile..." });
               profileAction(formData);
             });
           })}
@@ -116,7 +111,7 @@ export function SettingsForms({ profile }: { profile: Profile }) {
             formData.set("password", values.password);
             formData.set("confirmPassword", values.confirmPassword);
             startTransition(() => {
-              pushToast({ tone: "pending", message: "Updating password..." });
+              showToast({ tone: "pending", message: "Updating password..." });
               passwordAction(formData);
             });
             resetPassword();
@@ -150,7 +145,7 @@ export function SettingsForms({ profile }: { profile: Profile }) {
         <form
           action={() => {
             startTransition(() => {
-              pushToast({ tone: "pending", message: "Deleting account..." });
+              showToast({ tone: "pending", message: "Deleting account..." });
               deleteAction();
             });
           }}
@@ -170,19 +165,6 @@ export function SettingsForms({ profile }: { profile: Profile }) {
         </form>
       </section>
 
-      {(toast ?? resolvedToast) ? (
-        <div
-          className={`fixed bottom-6 right-6 z-50 rounded-2xl px-4 py-3 text-sm font-medium shadow-xl ${
-            (toast ?? resolvedToast)?.tone === "success"
-              ? "bg-emerald-600 text-white"
-              : (toast ?? resolvedToast)?.tone === "error"
-                ? "bg-red-600 text-white"
-                : "bg-slate-900 text-white"
-          }`}
-        >
-          {(toast ?? resolvedToast)?.message}
-        </div>
-      ) : null}
     </div>
   );
 }

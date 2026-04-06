@@ -6,6 +6,45 @@ export type ProjectStatus = "active" | "paused" | "completed" | "archived";
 export interface Database {
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          actor_id: string;
+          created_at: string;
+          description: string | null;
+          event_type: string;
+          id: string;
+          metadata: Json;
+          project_id: string | null;
+          title: string;
+        };
+        Insert: {
+          actor_id: string;
+          created_at?: string;
+          description?: string | null;
+          event_type: string;
+          id?: string;
+          metadata?: Json;
+          project_id?: string | null;
+          title: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["audit_logs"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_actor_id_fkey";
+            columns: ["actor_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "audit_logs_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       analytics_events: {
         Row: {
           id: string;
@@ -119,6 +158,36 @@ export interface Database {
           },
         ];
       };
+      workspace_invites: {
+        Row: {
+          accepted_at: string | null;
+          email: string;
+          id: string;
+          invited_at: string;
+          invited_by: string;
+          role: ProfileRole;
+          status: "pending" | "accepted" | "revoked";
+        };
+        Insert: {
+          accepted_at?: string | null;
+          email: string;
+          id?: string;
+          invited_at?: string;
+          invited_by: string;
+          role?: ProfileRole;
+          status?: "pending" | "accepted" | "revoked";
+        };
+        Update: Partial<Database["public"]["Tables"]["workspace_invites"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "workspace_invites_invited_by_fkey";
+            columns: ["invited_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -138,6 +207,8 @@ export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 export type Project = Database["public"]["Tables"]["projects"]["Row"];
 export type ProjectMember = Database["public"]["Tables"]["project_members"]["Row"];
 export type AnalyticsEvent = Database["public"]["Tables"]["analytics_events"]["Row"];
+export type AuditLog = Database["public"]["Tables"]["audit_logs"]["Row"];
+export type WorkspaceInvite = Database["public"]["Tables"]["workspace_invites"]["Row"];
 
 export interface RevenueDatum {
   month: string;
@@ -169,6 +240,29 @@ export interface ProjectWithMembers extends Project {
   members: Profile[];
 }
 
+export interface CurrentWorkspaceAccess {
+  userId: string;
+  role: ProfileRole;
+}
+
+export type DataSource = "live" | "seed" | "empty";
+
+export interface WorkspaceChecklistItem {
+  id: string;
+  title: string;
+  description: string;
+  done: boolean;
+}
+
+export interface WorkspaceReadiness {
+  liveProjectCount: number;
+  liveEventCount: number;
+  teamCount: number;
+  activityCount: number;
+  isBootstrapped: boolean;
+  checklist: WorkspaceChecklistItem[];
+}
+
 export interface DashboardStat {
   label: string;
   value: string;
@@ -187,6 +281,7 @@ export interface AnalyticsSummary {
 export interface ActionState {
   success?: boolean;
   message?: string;
+  errorId?: string;
   fieldErrors?: Record<string, string[] | undefined>;
 }
 

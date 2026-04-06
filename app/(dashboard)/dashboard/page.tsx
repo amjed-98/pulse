@@ -2,12 +2,21 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
+import { DemoPreviewNotice } from "@/components/dashboard/DemoPreviewNotice";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { StatCard } from "@/components/dashboard/StatCard";
+import { WorkspaceSetupCard } from "@/components/dashboard/WorkspaceSetupCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { DASHBOARD_STATS, SEED_DATA } from "@/lib/constants";
-import { getCurrentProfile, getProjects } from "@/lib/data";
-import { buildRevenueFromEvents, formatDate, getGreeting } from "@/lib/utils";
+import {
+  getActivityFeed,
+  getCurrentProfile,
+  getProfiles,
+  getWorkspaceAnalyticsEvents,
+  getWorkspaceProjects,
+  getWorkspaceReadiness,
+} from "@/lib/data";
+import { buildDashboardStats, buildRevenueFromEvents, formatDate, getGreeting } from "@/lib/utils";
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
@@ -17,8 +26,23 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 async function OverviewContent() {
-  const [profile, projects] = await Promise.all([getCurrentProfile(), getProjects()]);
-  const revenueData = buildRevenueFromEvents(SEED_DATA.events);
+  const [profile, liveProjects, liveEvents, activity, readiness, liveTeam] = await Promise.all([
+    getCurrentProfile(),
+    getWorkspaceProjects(),
+    getWorkspaceAnalyticsEvents(),
+    getActivityFeed(),
+    getWorkspaceReadiness(),
+    getProfiles(),
+  ]);
+  const usingPreviewProjects = liveProjects.length === 0;
+  const usingPreviewAnalytics = liveEvents.length === 0;
+  const projects = usingPreviewProjects ? SEED_DATA.projects : liveProjects;
+  const team = liveTeam.length > 0 ? liveTeam : SEED_DATA.team;
+  const revenueData = buildRevenueFromEvents(usingPreviewAnalytics ? SEED_DATA.events : liveEvents);
+  const stats =
+    liveProjects.length > 0 || liveEvents.length > 0 || liveTeam.length > 0
+      ? buildDashboardStats(projects, usingPreviewAnalytics ? SEED_DATA.events : liveEvents, team)
+      : DASHBOARD_STATS;
   const greetingName = profile?.full_name?.split(" ")[0] ?? "there";
 
   return (
@@ -32,17 +56,26 @@ async function OverviewContent() {
       </section>
 
       <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        {DASHBOARD_STATS.map((stat) => (
+        {stats.map((stat) => (
           <StatCard key={stat.label} {...stat} />
         ))}
       </section>
+
+      {!readiness.isBootstrapped ? <WorkspaceSetupCard readiness={readiness} /> : null}
+
+      {usingPreviewProjects || usingPreviewAnalytics ? (
+        <DemoPreviewNotice
+          title="Preview data is filling the gaps"
+          description="This dashboard still uses seeded portfolio data where your live workspace is empty. Create projects, invite teammates, and capture events to phase preview data out naturally."
+        />
+      ) : null}
 
       <section>
         <RevenueChart data={revenueData} />
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <ActivityFeed items={SEED_DATA.activity} />
+        <ActivityFeed items={activity.length > 0 ? activity : SEED_DATA.activity} />
         <div className="rounded-[1.75rem] border border-white/70 bg-white p-5 shadow-[var(--shadow-card)]">
           <div className="mb-5">
             <h2 className="text-lg font-semibold text-slate-950">Top projects</h2>

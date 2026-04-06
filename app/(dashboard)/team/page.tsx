@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 
+import { PendingInvites } from "@/components/dashboard/PendingInvites";
 import { TeamInviteForm } from "@/components/dashboard/TeamInviteForm";
 import { TeamTable } from "@/components/dashboard/TeamTable";
-import { getCurrentProfile, getProfiles } from "@/lib/data";
+import { canInviteMembers } from "@/lib/access";
+import { getCurrentProfile, getCurrentUser, getProfiles, getWorkspaceInvites } from "@/lib/data";
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
@@ -12,7 +14,13 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function TeamPage() {
-  const [profile, team] = await Promise.all([getCurrentProfile(), getProfiles()]);
+  const [user, profile, team, invites] = await Promise.all([
+    getCurrentUser(),
+    getCurrentProfile(),
+    getProfiles(),
+    getWorkspaceInvites(),
+  ]);
+  const canManageTeam = canInviteMembers(profile?.role);
 
   return (
     <div className="space-y-8">
@@ -22,8 +30,9 @@ export default async function TeamPage() {
         <p className="mt-2 text-sm text-slate-500">Manage collaborator access and keep permissions easy to audit.</p>
       </section>
 
-      <TeamInviteForm />
-      <TeamTable members={team} currentUserRole={profile?.role ?? "member"} />
+      <TeamInviteForm canInvite={canManageTeam} />
+      <PendingInvites invites={invites} canManage={canManageTeam} />
+      <TeamTable members={team} currentUserId={user?.id ?? null} currentUserRole={profile?.role ?? "member"} />
     </div>
   );
 }

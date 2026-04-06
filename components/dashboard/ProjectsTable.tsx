@@ -4,21 +4,33 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 
 import { deleteProject } from "@/lib/actions/projects";
-import type { ProjectWithMembers } from "@/lib/types";
+import { canManageProject } from "@/lib/access";
+import type { CurrentWorkspaceAccess, ProjectWithMembers } from "@/lib/types";
 import { formatDate, getStatusTone } from "@/lib/utils";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { useToast } from "@/components/ui/ToastProvider";
 
 interface ProjectsTableProps {
   projects: ProjectWithMembers[];
+  currentUserId: string | null;
+  currentUserRole: CurrentWorkspaceAccess["role"] | null;
 }
 
 type SortKey = "name" | "status" | "due_date";
 
-export function ProjectsTable({ projects }: ProjectsTableProps) {
+export function ProjectsTable({ projects, currentUserId, currentUserRole }: ProjectsTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [isPending, startTransition] = useTransition();
+  const { showToast } = useToast();
+  const access =
+    currentUserId && currentUserRole
+      ? {
+          userId: currentUserId,
+          role: currentUserRole,
+        }
+      : null;
 
   const sortedProjects = [...projects].sort((left, right) => {
     if (sortKey === "due_date") {
@@ -56,7 +68,10 @@ export function ProjectsTable({ projects }: ProjectsTableProps) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {sortedProjects.map((project) => (
+            {sortedProjects.map((project) => {
+              const canManage = canManageProject(project, access);
+
+              return (
               <tr key={project.id} className="align-top transition hover:bg-slate-50/70">
                 <td className="px-5 py-4">
                   <Link href={`/projects/${project.id}`} className="font-medium text-slate-900 transition hover:text-[var(--color-accent)]">
@@ -92,29 +107,38 @@ export function ProjectsTable({ projects }: ProjectsTableProps) {
                   <div className="flex justify-end gap-2">
                     <Link href={`/projects/${project.id}`}>
                       <Button variant="secondary" size="sm">
-                        Edit
+                        {canManage ? "Edit" : "View"}
                       </Button>
                     </Link>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      loading={isPending}
-                      onClick={() => {
-                        if (!window.confirm(`Delete ${project.name}?`)) {
-                          return;
-                        }
+                    {canManage ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        loading={isPending}
+                        onClick={() => {
+                          if (!window.confirm(`Delete ${project.name}?`)) {
+                            return;
+                          }
 
-                        startTransition(async () => {
-                          await deleteProject(project.id);
-                        });
-                      }}
-                    >
-                      Delete
-                    </Button>
+                          startTransition(async () => {
+                            const result = await deleteProject(project.id);
+                            if (result.message) {
+                              showToast({
+                                tone: result.success ? "success" : "error",
+                                message: result.message,
+                              });
+                            }
+                          });
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    ) : null}
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

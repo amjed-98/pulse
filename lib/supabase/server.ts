@@ -3,14 +3,16 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 
+import { getServerEnv } from "@/lib/env";
 import type { Database } from "@/lib/types";
 
 export async function createSupabaseServerClient() {
   const cookieStore = await cookies();
+  const env = getServerEnv();
 
   return createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    env.NEXT_PUBLIC_SUPABASE_URL,
+    env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     {
       cookies: {
         getAll() {
@@ -27,14 +29,15 @@ export async function createSupabaseServerClient() {
 }
 
 export async function createSupabaseAdminClient() {
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const env = getServerEnv();
+  const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!serviceRoleKey) {
     return null;
   }
 
   return createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    env.NEXT_PUBLIC_SUPABASE_URL,
     serviceRoleKey,
     {
       cookies: {

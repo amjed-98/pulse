@@ -4,7 +4,9 @@ import { twMerge } from "tailwind-merge";
 import type {
   AnalyticsEvent,
   AnalyticsSeriesDatum,
+  DashboardStat,
   EventBreakdownDatum,
+  Profile,
   Project,
   ProjectStatus,
   RevenueDatum,
@@ -39,6 +41,38 @@ export function formatDate(value: string | null, options?: Intl.DateTimeFormatOp
   }).format(new Date(value));
 }
 
+export function formatRelativeTime(value: string) {
+  const date = new Date(value);
+  const diffMs = date.getTime() - Date.now();
+  const diffMinutes = Math.round(diffMs / (1000 * 60));
+  const formatter = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+
+  if (Math.abs(diffMinutes) < 60) {
+    return formatter.format(diffMinutes, "minute");
+  }
+
+  const diffHours = Math.round(diffMinutes / 60);
+
+  if (Math.abs(diffHours) < 24) {
+    return formatter.format(diffHours, "hour");
+  }
+
+  const diffDays = Math.round(diffHours / 24);
+
+  if (Math.abs(diffDays) < 30) {
+    return formatter.format(diffDays, "day");
+  }
+
+  const diffMonths = Math.round(diffDays / 30);
+
+  if (Math.abs(diffMonths) < 12) {
+    return formatter.format(diffMonths, "month");
+  }
+
+  const diffYears = Math.round(diffMonths / 12);
+  return formatter.format(diffYears, "year");
+}
+
 export function getGreeting(date = new Date()) {
   const hour = date.getHours();
 
@@ -68,12 +102,50 @@ export function getStatusTone(status: ProjectStatus) {
   }
 }
 
+function getRevenueWeight(eventName: string) {
+  switch (eventName) {
+    case "conversion_recorded":
+      return 900;
+    case "project_completed":
+      return 480;
+    case "team_invited":
+      return 220;
+    case "project_created":
+      return 180;
+    case "project_member_added":
+      return 90;
+    default:
+      return 60;
+  }
+}
+
+function formatTrendPercentage(current: number, previous: number) {
+  if (previous === 0) {
+    return current === 0 ? "0.0%" : "+100.0%";
+  }
+
+  const delta = ((current - previous) / previous) * 100;
+  const signed = delta >= 0 ? "+" : "";
+  return `${signed}${delta.toFixed(1)}%`;
+}
+
+function getRangeTotal(events: AnalyticsEvent[], startDaysAgo: number, endDaysAgo = 0, predicate?: (event: AnalyticsEvent) => boolean) {
+  const now = Date.now();
+  const start = now - startDaysAgo * 24 * 60 * 60 * 1000;
+  const end = now - endDaysAgo * 24 * 60 * 60 * 1000;
+
+  return events.filter((event) => {
+    const timestamp = new Date(event.recorded_at).getTime();
+    return timestamp >= start && timestamp < end && (!predicate || predicate(event));
+  }).length;
+}
+
 export function buildRevenueFromEvents(events: AnalyticsEvent[]): RevenueDatum[] {
   const monthlyTotals = new Map<string, number>();
 
   for (const event of events) {
     const month = new Intl.DateTimeFormat("en-US", { month: "short" }).format(new Date(event.recorded_at));
-    monthlyTotals.set(month, (monthlyTotals.get(month) ?? 0) + Number(event.value) * 140);
+    monthlyTotals.set(month, (monthlyTotals.get(month) ?? 0) + Number(event.value) * getRevenueWeight(event.event_name));
   }
 
   return Array.from(monthlyTotals.entries()).map(([month, revenue], index) => ({
@@ -109,7 +181,7 @@ export function buildAnalyticsSeries(events: AnalyticsEvent[], days: number): An
     }
 
     current.users += 1;
-    current.revenue += Number(event.value) * 120;
+    current.revenue += Number(event.value) * getRevenueWeight(event.event_name);
     current.sessions += Math.max(1, Math.round(Number(event.value)));
   }
 
@@ -134,6 +206,62 @@ export function calculateProjectCompletion(projects: Project[]) {
   }
 
   return Math.round(projects.reduce((sum, project) => sum + project.progress, 0) / projects.length);
+}
+
+export function buildDashboardStats(projects: Project[], events: AnalyticsEvent[], team: Profile[]): DashboardStat[] {
+  const revenueSeries = buildRevenueFromEvents(events);
+  const currentRevenue = revenueSeries.at(-1)?.revenue ?? 0;
+  const previousRevenue = revenueSeries.at(-2)?.revenue ?? 0;
+  const activeProjects = projects.filter((project) => project.status === "active").length;
+  const currentProjectWindow = getRangeTotal(events, 30, 0, (event) => event.event_name === "project_created");
+  const previousProjectWindow = getRangeTotal(events, 60, 30, (event) => event.event_name === "project_created");
+  const now = Date.now();
+  const currentTeamGrowth = team.filter((member) => {
+    const createdAt = new Date(member.created_at).getTime();
+    return createdAt >= now - 30 * 24 * 60 * 60 * 1000;
+  }).length;
+  const previousTeamGrowth = team.filter((member) => {
+    const createdAt = new Date(member.created_at).getTime();
+    return createdAt >= now - 60 * 24 * 60 * 60 * 1000 && createdAt < now - 30 * 24 * 60 * 60 * 1000;
+  }).length;
+  const completion = calculateProjectCompletion(projects);
+  const currentCompletionSignal = getRangeTotal(events, 30, 0, (event) =>
+    event.event_name === "project_completed" || event.event_name === "project_updated",
+  );
+  const previousCompletionSignal = getRangeTotal(events, 60, 30, (event) =>
+    event.event_name === "project_completed" || event.event_name === "project_updated",
+  );
+
+  return [
+    {
+      label: "Total Revenue",
+      value: formatCurrency(currentRevenue),
+      trend: formatTrendPercentage(currentRevenue, previousRevenue),
+      trendDirection: currentRevenue >= previousRevenue ? "up" : "down",
+      icon: "revenue",
+    },
+    {
+      label: "Active Projects",
+      value: formatNumber(activeProjects),
+      trend: formatTrendPercentage(currentProjectWindow, previousProjectWindow),
+      trendDirection: currentProjectWindow >= previousProjectWindow ? "up" : "down",
+      icon: "projects",
+    },
+    {
+      label: "Team Members",
+      value: formatNumber(team.length),
+      trend: formatTrendPercentage(currentTeamGrowth, previousTeamGrowth),
+      trendDirection: currentTeamGrowth >= previousTeamGrowth ? "up" : "down",
+      icon: "team",
+    },
+    {
+      label: "Tasks Completed",
+      value: `${completion}%`,
+      trend: formatTrendPercentage(currentCompletionSignal, previousCompletionSignal),
+      trendDirection: currentCompletionSignal >= previousCompletionSignal ? "up" : "down",
+      icon: "tasks",
+    },
+  ];
 }
 
 export function getInitials(name?: string | null) {

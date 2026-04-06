@@ -10,6 +10,7 @@ import type { ActionState } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { useToast } from "@/components/ui/ToastProvider";
 
 const schema = z.object({
   name: z.string().min(2, "Project name must be at least 2 characters."),
@@ -23,9 +24,10 @@ type Values = z.infer<typeof schema>;
 
 const initialState: ActionState = {};
 
-export function CreateProjectModal() {
+export function CreateProjectModal({ triggerLabel = "New project" }: { triggerLabel?: string }) {
   const [open, setOpen] = useState(false);
   const [state, submitAction, isPending] = useActionState(createProject, initialState);
+  const { showToast } = useToast();
   const {
     register,
     handleSubmit,
@@ -49,6 +51,15 @@ export function CreateProjectModal() {
     }
   }, [reset, state.success]);
 
+  useEffect(() => {
+    if (state.message) {
+      showToast({
+        tone: state.success ? "success" : "error",
+        message: state.message,
+      });
+    }
+  }, [showToast, state.message, state.success]);
+
   const onSubmit = handleSubmit((values) => {
     const formData = new FormData();
     formData.set("name", values.name);
@@ -64,7 +75,7 @@ export function CreateProjectModal() {
 
   return (
     <>
-      <Button onClick={() => setOpen(true)}>New project</Button>
+      <Button onClick={() => setOpen(true)}>{triggerLabel}</Button>
       <Modal
         open={open}
         onClose={() => setOpen(false)}
@@ -100,7 +111,6 @@ export function CreateProjectModal() {
             <Input label="Progress" type="number" min="0" max="100" error={errors.progress?.message ?? state.fieldErrors?.progress?.[0]} {...register("progress")} />
             <Input label="Due date" type="date" error={errors.dueDate?.message ?? state.fieldErrors?.dueDate?.[0]} {...register("dueDate")} />
           </div>
-          {state.message ? <p className={state.success ? "text-sm text-emerald-600" : "text-sm text-red-600"}>{state.message}</p> : null}
           <div className="flex justify-end gap-3">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
               Cancel

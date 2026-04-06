@@ -5,6 +5,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { recordAnalyticsEvent } from "@/lib/analytics";
+import { createAuditLog } from "@/lib/audit";
+import { toActionErrorState, toAuthErrorState } from "@/lib/logger";
+import { requireCurrentWorkspaceAccess } from "@/lib/permissions";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import type { ActionState, AuthFormState } from "@/lib/types";
 
@@ -65,65 +70,127 @@ function getOrigin(headersList: Headers) {
 }
 
 export async function signIn(_: AuthFormState, formData: FormData): Promise<AuthFormState> {
-  const parsed = signInSchema.safeParse({
-    email: formData.get("email"),
-    password: formData.get("password"),
-  });
+  try {
+    const parsed = signInSchema.safeParse({
+      email: formData.get("email"),
+      password: formData.get("password"),
+    });
 
-  if (!parsed.success) {
-    return withFieldErrors(parsed.error);
+    if (!parsed.success) {
+      return withFieldErrors(parsed.error);
+    }
+
+    const signInRateLimit = await enforceRateLimit({
+      scope: "auth.sign-in",
+      limit: 5,
+      windowMs: 5 * 60 * 1000,
+      key: parsed.data.email.toLowerCase(),
+    });
+
+    if (!signInRateLimit.allowed) {
+      return {
+        success: false,
+        email: parsed.data.email,
+        message: "Too many sign-in attempts. Wait a few minutes and try again.",
+      };
+    }
+
+    const supabase = await createSupabaseServerClient();
+    const { error } = await supabase.auth.signInWithPassword(parsed.data);
+
+    if (error) {
+      return {
+        success: false,
+        message: error.message,
+        email: parsed.data.email,
+      };
+    }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user) {
+      await recordAnalyticsEvent({
+        userId: user.id,
+        eventName: "signin_completed",
+        value: 1,
+      });
+    }
+
+    revalidatePath("/", "layout");
+    redirect("/dashboard");
+  } catch (error) {
+    return toAuthErrorState({
+      source: "auth.signIn",
+      message: "Unexpected failure while signing in.",
+      userMessage: "Could not sign you in right now.",
+      error,
+      email: typeof formData.get("email") === "string" ? String(formData.get("email")) : undefined,
+    });
   }
-
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.signInWithPassword(parsed.data);
-
-  if (error) {
-    return {
-      success: false,
-      message: error.message,
-      email: parsed.data.email,
-    };
-  }
-
-  revalidatePath("/", "layout");
-  redirect("/dashboard");
 }
 
 export async function signUp(_: AuthFormState, formData: FormData): Promise<AuthFormState> {
-  const parsed = signUpSchema.safeParse({
-    fullName: formData.get("fullName"),
-    email: formData.get("email"),
-    password: formData.get("password"),
-    confirmPassword: formData.get("confirmPassword"),
-  });
+  try {
+    const parsed = signUpSchema.safeParse({
+      fullName: formData.get("fullName"),
+      email: formData.get("email"),
+      password: formData.get("password"),
+      confirmPassword: formData.get("confirmPassword"),
+    });
 
-  if (!parsed.success) {
-    return withFieldErrors(parsed.error);
-  }
+    if (!parsed.success) {
+      return withFieldErrors(parsed.error);
+    }
 
-  const supabase = await createSupabaseServerClient();
-  const headersList = await headers();
-  const origin = getOrigin(headersList);
-  const { error } = await supabase.auth.signUp({
-    email: parsed.data.email,
-    password: parsed.data.password,
-    options: {
-      emailRedirectTo: `${origin}/auth/callback`,
-      data: {
-        full_name: parsed.data.fullName,
-      },
-    },
-  });
+    const signUpRateLimit = await enforceRateLimit({
+      scope: "auth.sign-up",
+      limit: 3,
+      windowMs: 10 * 60 * 1000,
+      key: parsed.data.email.toLowerCase(),
+    });
 
-  if (error) {
-    return {
-      success: false,
-      message: error.message,
+    if (!signUpRateLimit.allowed) {
+      return {
+        success: false,
+        email: parsed.data.email,
+        message: "Too many signup attempts. Wait a few minutes and try again.",
+      };
+    }
+
+    const supabase = await createSupabaseServerClient();
+    const headersList = await headers();
+    const origin = getOrigin(headersList);
+    const { error } = await supabase.auth.signUp({
       email: parsed.data.email,
-    };
-  }
+      password: parsed.data.password,
+      options: {
+        emailRedirectTo: `${origin}/auth/callback`,
+        data: {
+          full_name: parsed.data.fullName,
+        },
+      },
+    });
 
-  redirect(`/signup?status=check-email&email=${encodeURIComponent(parsed.data.email)}`);
+    if (error) {
+      return {
+        success: false,
+        message: error.message,
+        email: parsed.data.email,
+      };
+    }
+
+    redirect(`/signup?status=check-email&email=${encodeURIComponent(parsed.data.email)}`);
+  } catch (error) {
+    return toAuthErrorState({
+      source: "auth.signUp",
+      message: "Unexpected failure while signing up.",
+      userMessage: "Could not create the account right now.",
+      error,
+      email: typeof formData.get("email") === "string" ? String(formData.get("email")) : undefined,
+    });
+  }
 }
 
 export async function signOut() {
@@ -134,88 +201,182 @@ export async function signOut() {
 }
 
 export async function updateProfile(_: ActionState, formData: FormData): Promise<ActionState> {
-  const parsed = updateProfileSchema.safeParse({
-    fullName: formData.get("fullName"),
-    avatarUrl: formData.get("avatarUrl"),
-  });
+  try {
+    const parsed = updateProfileSchema.safeParse({
+      fullName: formData.get("fullName"),
+      avatarUrl: formData.get("avatarUrl"),
+    });
 
-  if (!parsed.success) {
-    return withFieldErrors(parsed.error);
+    if (!parsed.success) {
+      return withFieldErrors(parsed.error);
+    }
+
+    const access = await requireCurrentWorkspaceAccess();
+    const changePasswordRateLimit = await enforceRateLimit({
+      scope: "auth.change-password",
+      limit: 3,
+      windowMs: 15 * 60 * 1000,
+      key: access.userId,
+    });
+
+    if (!changePasswordRateLimit.allowed) {
+      return {
+        success: false,
+        message: "Password changes are temporarily locked. Try again later.",
+      };
+    }
+
+    const supabase = await createSupabaseServerClient();
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        full_name: parsed.data.fullName,
+        avatar_url: parsed.data.avatarUrl || null,
+      })
+      .eq("id", access.userId);
+
+    if (error) {
+      return toActionErrorState({
+        source: "auth.updateProfile",
+        message: "Profile update failed during mutation.",
+        userMessage: "Could not update the profile right now.",
+        error,
+        context: {
+          userId: access.userId,
+        },
+      });
+    }
+
+    await createAuditLog({
+      actorId: access.userId,
+      eventType: "auth.profile_updated",
+      title: "Updated profile",
+      description: "Profile identity details were changed in account settings.",
+      metadata: {
+        fullName: parsed.data.fullName,
+        avatarUrl: parsed.data.avatarUrl || null,
+      },
+    });
+    await recordAnalyticsEvent({
+      userId: access.userId,
+      eventName: "profile_updated",
+      value: 1,
+    });
+
+    revalidatePath("/settings");
+    revalidatePath("/dashboard");
+    return { success: true, message: "Profile updated." };
+  } catch (error) {
+    return toActionErrorState({
+      source: "auth.updateProfile",
+      message: "Unexpected failure while updating profile.",
+      userMessage: "Could not update the profile right now.",
+      error,
+    });
   }
-
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, message: "You must be signed in to update your profile." };
-  }
-
-  const { error } = await supabase
-    .from("profiles")
-    .update({
-      full_name: parsed.data.fullName,
-      avatar_url: parsed.data.avatarUrl || null,
-    })
-    .eq("id", user.id);
-
-  if (error) {
-    return { success: false, message: error.message };
-  }
-
-  revalidatePath("/settings");
-  revalidatePath("/dashboard");
-  return { success: true, message: "Profile updated." };
 }
 
 export async function changePassword(_: ActionState, formData: FormData): Promise<ActionState> {
-  const parsed = changePasswordSchema.safeParse({
-    password: formData.get("password"),
-    confirmPassword: formData.get("confirmPassword"),
-  });
+  try {
+    const parsed = changePasswordSchema.safeParse({
+      password: formData.get("password"),
+      confirmPassword: formData.get("confirmPassword"),
+    });
 
-  if (!parsed.success) {
-    return withFieldErrors(parsed.error);
+    if (!parsed.success) {
+      return withFieldErrors(parsed.error);
+    }
+
+    const access = await requireCurrentWorkspaceAccess();
+    const supabase = await createSupabaseServerClient();
+    const { error } = await supabase.auth.updateUser({
+      password: parsed.data.password,
+    });
+
+    if (error) {
+      return toActionErrorState({
+        source: "auth.changePassword",
+        message: "Password update failed via Supabase auth.",
+        userMessage: "Could not update the password right now.",
+        error,
+        context: {
+          userId: access.userId,
+        },
+      });
+    }
+
+    await createAuditLog({
+      actorId: access.userId,
+      eventType: "auth.password_changed",
+      title: "Updated password",
+      description: "Account credentials were rotated from the settings page.",
+    });
+    await recordAnalyticsEvent({
+      userId: access.userId,
+      eventName: "password_changed",
+      value: 1,
+    });
+
+    return { success: true, message: "Password updated." };
+  } catch (error) {
+    return toActionErrorState({
+      source: "auth.changePassword",
+      message: "Unexpected failure while changing password.",
+      userMessage: "Could not update the password right now.",
+      error,
+    });
   }
-
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.updateUser({
-    password: parsed.data.password,
-  });
-
-  if (error) {
-    return { success: false, message: error.message };
-  }
-
-  return { success: true, message: "Password updated." };
 }
 
 export async function deleteAccount(): Promise<ActionState> {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  try {
+    const access = await requireCurrentWorkspaceAccess();
+    const deleteAccountRateLimit = await enforceRateLimit({
+      scope: "auth.delete-account",
+      limit: 2,
+      windowMs: 60 * 60 * 1000,
+      key: access.userId,
+    });
 
-  if (!user) {
-    return { success: false, message: "You must be signed in to delete your account." };
+    if (!deleteAccountRateLimit.allowed) {
+      return {
+        success: false,
+        message: "Account deletion is temporarily locked. Try again later.",
+      };
+    }
+
+    const adminClient = await createSupabaseAdminClient();
+
+    if (!adminClient) {
+      return {
+        success: false,
+        message: "Set SUPABASE_SERVICE_ROLE_KEY to enable account deletion.",
+      };
+    }
+
+    const { error } = await adminClient.auth.admin.deleteUser(access.userId);
+
+    if (error) {
+      return toActionErrorState({
+        source: "auth.deleteAccount",
+        message: "Account deletion failed via Supabase admin client.",
+        userMessage: "Could not delete the account right now.",
+        error,
+        context: {
+          userId: access.userId,
+        },
+      });
+    }
+
+    revalidatePath("/", "layout");
+    redirect("/signup");
+  } catch (error) {
+    return toActionErrorState({
+      source: "auth.deleteAccount",
+      message: "Unexpected failure while deleting account.",
+      userMessage: "Could not delete the account right now.",
+      error,
+    });
   }
-
-  const adminClient = await createSupabaseAdminClient();
-
-  if (!adminClient) {
-    return {
-      success: false,
-      message: "Set SUPABASE_SERVICE_ROLE_KEY to enable account deletion.",
-    };
-  }
-
-  const { error } = await adminClient.auth.admin.deleteUser(user.id);
-
-  if (error) {
-    return { success: false, message: error.message };
-  }
-
-  revalidatePath("/", "layout");
-  redirect("/signup");
 }

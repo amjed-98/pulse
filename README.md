@@ -11,6 +11,9 @@ Pulse is a portfolio SaaS dashboard built with Next.js 15, React 19, Tailwind CS
 - Team management with invites and role-aware UI
 - Settings flows for profile updates, password changes, and account deletion
 - Tailwind CSS v4 design system with responsive dashboard layout
+- Audit logging and activity timelines backed by Supabase
+- Role-aware project collaboration and workspace invite lifecycle
+- Health checks, CI verification, environment validation, and abuse throttling
 
 ## Stack
 
@@ -78,6 +81,16 @@ pnpm build
 pnpm start
 ```
 
+## Environment Validation
+
+Pulse validates required public environment variables at boot through a shared env module. If `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, or `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are malformed or missing, the app fails fast instead of surfacing vague runtime errors later.
+
+`SUPABASE_SERVICE_ROLE_KEY` is optional, but some features degrade without it:
+
+- workspace invites
+- account deletion
+- deep database health probing
+
 ## Project Structure
 
 ```text
@@ -88,6 +101,32 @@ supabase/           SQL migration files
 middleware.ts       session refresh and route protection
 ```
 
+## Architecture Notes
+
+- Authentication is enforced in middleware and RSC layouts, not in client components.
+- All mutations use Next.js Server Actions with Supabase SSR clients.
+- Authorization is enforced twice: UX-level gating in the dashboard and RLS in Postgres.
+- Audit logs and analytics events are separate concerns:
+  - `audit_logs` capture operator-facing activity history.
+  - `analytics_events` capture product instrumentation and KPI signals.
+- Empty workspaces do not pretend to have live data:
+  - overview can show explicit preview mode
+  - projects and analytics use guided empty states for real onboarding
+- Team administration supports:
+  - pending invites with assigned roles
+  - accepted invite role propagation on signup
+  - admin role changes and revocation flows
+
+## Production Work Added
+
+- Structured server logging with reference IDs
+- App Router error boundaries and auth callback hardening
+- Shared toast feedback across mutation-heavy screens
+- Rate limiting for auth, invites, and destructive admin actions
+- `/api/health` runtime probe
+- GitHub Actions CI for lint, typecheck, and build
+- Environment validation through a shared config module
+
 ## Verification
 
 The project was verified with:
@@ -97,6 +136,8 @@ pnpm typecheck
 pnpm lint
 pnpm build
 ```
+
+The repository also includes GitHub Actions CI in [.github/workflows/ci.yml](/home/amjad/Desktop/projects/pulse/.github/workflows/ci.yml) to run the same checks on pushes and pull requests.
 
 ## Demo Behavior
 
@@ -115,3 +156,17 @@ Set the same environment variables from `.env.local` in your Vercel project and 
 ```text
 https://your-domain.com/auth/callback
 ```
+
+## Health Check
+
+Pulse exposes a runtime health endpoint at:
+
+```text
+/api/health
+```
+
+It reports:
+
+- env configuration status
+- database probe status
+- degraded mode when the service role key is intentionally absent

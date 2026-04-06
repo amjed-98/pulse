@@ -2,7 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { AnalyticsCharts } from "@/components/dashboard/AnalyticsCharts";
-import { filterEventsByDays, getAnalyticsEvents } from "@/lib/data";
+import { DemoPreviewNotice } from "@/components/dashboard/DemoPreviewNotice";
+import { EmptyState } from "@/components/dashboard/EmptyState";
+import { WorkspaceSetupCard } from "@/components/dashboard/WorkspaceSetupCard";
+import { Button } from "@/components/ui/Button";
+import { filterEventsByDays, getWorkspaceAnalyticsEvents, getWorkspaceReadiness } from "@/lib/data";
 import { buildAnalyticsSeries, buildEventBreakdown, formatNumber } from "@/lib/utils";
 
 const ranges = [7, 30, 90] as const;
@@ -24,7 +28,8 @@ export default async function AnalyticsPage({
     ? (Number(params.range) as (typeof ranges)[number])
     : 30;
 
-  const events = filterEventsByDays(await getAnalyticsEvents(), range);
+  const [allEvents, readiness] = await Promise.all([getWorkspaceAnalyticsEvents(), getWorkspaceReadiness()]);
+  const events = filterEventsByDays(allEvents, range);
   const series = buildAnalyticsSeries(events, range);
   const eventsByType = buildEventBreakdown(events);
   const totalEvents = events.length;
@@ -70,7 +75,41 @@ export default async function AnalyticsPage({
         ))}
       </section>
 
-      <AnalyticsCharts series={series} eventsByType={eventsByType} />
+      {allEvents.length > 0 ? (
+        <AnalyticsCharts series={series} eventsByType={eventsByType} />
+      ) : (
+        <>
+          <DemoPreviewNotice
+            title="Analytics needs live instrumentation"
+            description="This screen is intentionally empty until the workspace captures real events. That keeps the product credible instead of fabricating metrics where none exist."
+          />
+          <EmptyState
+            eyebrow="Analytics"
+            title="No live events captured"
+            description="Once events start flowing into Supabase, this page becomes a real proof point for instrumentation quality, trend analysis, and revenue storytelling."
+            actions={
+              <Link href="/dashboard">
+                <Button>Back to overview</Button>
+              </Link>
+            }
+            aside={
+              <div className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Suggested first events</p>
+                <ul className="space-y-3 text-sm leading-6 text-slate-600">
+                  <li>`project_created` when a new initiative is opened.</li>
+                  <li>`team_invited` when an admin sends a workspace invite.</li>
+                  <li>`conversion_recorded` or business-specific actions tied to value.</li>
+                </ul>
+              </div>
+            }
+          />
+          <WorkspaceSetupCard
+            readiness={readiness}
+            title="Instrumentation readiness"
+            description="The rest of the product is ready for live analytics, but the charts only become meaningful after real event capture starts."
+          />
+        </>
+      )}
     </div>
   );
 }

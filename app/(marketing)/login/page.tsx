@@ -12,9 +12,13 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; ref?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, ref } = await searchParams;
+  const errorMessage =
+    error === "auth_callback_failed"
+      ? `We could not complete sign-in from the authentication callback.${ref ? ` Reference: ${ref}` : ""}`
+      : error;
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
@@ -39,8 +43,8 @@ export default async function LoginPage({
         </section>
 
         <div className="w-full max-w-md justify-self-center space-y-4">
-          {error ? (
-            <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+          {errorMessage ? (
+            <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{errorMessage}</div>
           ) : null}
           <LoginForm />
         </div>
