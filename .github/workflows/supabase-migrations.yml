@@ -22,6 +22,9 @@ concurrency:
   group: supabase-migrations-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  SUPABASE_CLI_VERSION: 2.78.1
+
 jobs:
   validate:
     name: Validate migration files
@@ -31,10 +34,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v1
-        with:
-          version: 2.78.1
+      - name: Install Supabase CLI
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o /tmp/supabase.tar.gz \
+            "https://github.com/supabase/cli/releases/download/v${SUPABASE_CLI_VERSION}/supabase_linux_amd64.tar.gz"
+          tar -xzf /tmp/supabase.tar.gz -C /tmp
+          install /tmp/supabase "$HOME/.local/bin/supabase"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/supabase" --version
 
       - name: Validate migration filename format
         run: |
@@ -70,10 +78,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v1
-        with:
-          version: 2.78.1
+      - name: Install Supabase CLI
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o /tmp/supabase.tar.gz \
+            "https://github.com/supabase/cli/releases/download/v${SUPABASE_CLI_VERSION}/supabase_linux_amd64.tar.gz"
+          tar -xzf /tmp/supabase.tar.gz -C /tmp
+          install /tmp/supabase "$HOME/.local/bin/supabase"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/supabase" --version
 
       - name: Verify required secrets
         env:
