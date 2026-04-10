@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 
 import { recordAnalyticsEvent } from "@/lib/analytics";
@@ -121,6 +122,8 @@ export async function signIn(_: AuthFormState, formData: FormData): Promise<Auth
     revalidatePath("/", "layout");
     redirect("/dashboard");
   } catch (error) {
+    unstable_rethrow(error);
+
     return toAuthErrorState({
       source: "auth.signIn",
       message: "Unexpected failure while signing in.",
@@ -183,6 +186,8 @@ export async function signUp(_: AuthFormState, formData: FormData): Promise<Auth
 
     redirect(`/signup?status=check-email&email=${encodeURIComponent(parsed.data.email)}`);
   } catch (error) {
+    unstable_rethrow(error);
+
     return toAuthErrorState({
       source: "auth.signUp",
       message: "Unexpected failure while signing up.",

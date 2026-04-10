@@ -20,7 +20,12 @@ export async function createSupabaseServerClient() {
         },
         setAll(cookieValues) {
           for (const cookie of cookieValues) {
-            cookieStore.set(cookie.name, cookie.value, cookie.options);
+            try {
+              cookieStore.set(cookie.name, cookie.value, cookie.options);
+            } catch {
+              // Server Components cannot mutate cookies during render.
+              // Middleware is responsible for refreshing the auth session.
+            }
           }
         },
       },
