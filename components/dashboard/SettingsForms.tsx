@@ -1,19 +1,19 @@
 "use client";
 
-import { startTransition, useActionState, useEffect } from "react";
+import { startTransition, useActionState, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
 import { changePassword, deleteAccount, updateProfile } from "@/lib/actions/auth";
 import type { ActionState, Profile } from "@/lib/types";
+import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/ToastProvider";
 
 const profileSchema = z.object({
   fullName: z.string().min(2, "Full name must be at least 2 characters."),
-  avatarUrl: z.string().url("Enter a valid URL.").or(z.literal("")),
 });
 
 const passwordSchema = z
@@ -33,6 +33,11 @@ export function SettingsForms({ profile }: { profile: Profile }) {
   const [passwordState, passwordAction, passwordPending] = useActionState(changePassword, initialState);
   const [deleteState, deleteAction, deletePending] = useActionState(deleteAccount, initialState);
   const { showToast } = useToast();
+  const lastToastMessageRef = useRef<string | null>(null);
+  const [persistedAvatarUrl, setPersistedAvatarUrl] = useState<string | null>(profile.avatar_url);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(profile.avatar_url);
+  const [removeAvatar, setRemoveAvatar] = useState(false);
 
   const {
     register: registerProfile,
@@ -42,7 +47,6 @@ export function SettingsForms({ profile }: { profile: Profile }) {
     resolver: zodResolver(profileSchema),
     defaultValues: {
       fullName: profile.full_name ?? "",
-      avatarUrl: profile.avatar_url ?? "",
     },
   });
 
@@ -60,9 +64,51 @@ export function SettingsForms({ profile }: { profile: Profile }) {
   });
 
   useEffect(() => {
+    setPersistedAvatarUrl(profile.avatar_url);
+  }, [profile.avatar_url]);
+
+  useEffect(() => {
+    if (avatarFile) {
+      const objectUrl = URL.createObjectURL(avatarFile);
+      setAvatarPreviewUrl(objectUrl);
+
+      return () => {
+        URL.revokeObjectURL(objectUrl);
+      };
+    }
+
+    setAvatarPreviewUrl(removeAvatar ? null : persistedAvatarUrl);
+  }, [avatarFile, persistedAvatarUrl, removeAvatar]);
+
+  useEffect(() => {
+    if (profileState.success) {
+      const nextAvatarUrl =
+        profileState.payload &&
+        typeof profileState.payload === "object" &&
+        !Array.isArray(profileState.payload) &&
+        "avatarUrl" in profileState.payload &&
+        typeof profileState.payload.avatarUrl === "string"
+          ? profileState.payload.avatarUrl
+          : null;
+
+      setAvatarFile(null);
+      setRemoveAvatar(false);
+      setPersistedAvatarUrl(nextAvatarUrl);
+      setAvatarPreviewUrl(nextAvatarUrl);
+    }
+  }, [profileState.payload, profileState.success]);
+
+  useEffect(() => {
+    if (passwordState.success) {
+      resetPassword();
+    }
+  }, [passwordState.success, resetPassword]);
+
+  useEffect(() => {
     const nextState = [profileState, passwordState, deleteState].find((state) => state.message);
 
-    if (nextState?.message) {
+    if (nextState?.message && nextState.message !== lastToastMessageRef.current) {
+      lastToastMessageRef.current = nextState.message;
       showToast({
         tone: nextState.success ? "success" : "error",
         message: nextState.message,
@@ -82,15 +128,79 @@ export function SettingsForms({ profile }: { profile: Profile }) {
           onSubmit={handleProfileSubmit((values) => {
             const formData = new FormData();
             formData.set("fullName", values.fullName);
-            formData.set("avatarUrl", values.avatarUrl);
+            formData.set("removeAvatar", removeAvatar ? "true" : "false");
+
+            if (avatarFile) {
+              formData.set("avatarFile", avatarFile);
+            }
+
             startTransition(() => {
-              showToast({ tone: "pending", message: "Saving profile..." });
+              showToast({
+                tone: "pending",
+                message: avatarFile ? "Uploading avatar..." : "Saving profile...",
+              });
               profileAction(formData);
             });
           })}
         >
-          <Input label="Full name" error={profileErrors.fullName?.message ?? profileState.fieldErrors?.fullName?.[0]} {...registerProfile("fullName")} />
-          <Input label="Avatar URL" error={profileErrors.avatarUrl?.message ?? profileState.fieldErrors?.avatarUrl?.[0]} {...registerProfile("avatarUrl")} />
+          <div className="rounded-[1.5rem] border border-slate-100 bg-slate-50/80 p-4 md:col-span-2">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start">
+              <div className="flex items-center gap-4">
+                <Avatar src={avatarPreviewUrl} name={profile.full_name} className="size-16 text-lg" />
+                <div>
+                  <p className="text-sm font-medium text-slate-900">Profile photo</p>
+                  <p className="mt-1 max-w-md text-sm leading-6 text-slate-500">
+                    Upload a square image for the sidebar, topbar, and team views. PNG, JPG, WEBP, or GIF up to 5 MB.
+                  </p>
+                </div>
+              </div>
+              <div className="grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+                <label className="flex flex-col gap-2">
+                  <span className="text-sm font-medium text-slate-700">Upload avatar</span>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    className="block h-11 w-full rounded-xl border border-[var(--color-border)] bg-white px-3.5 py-2 text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-950 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white"
+                    onChange={(event) => {
+                      const nextFile = event.target.files?.[0] ?? null;
+                      setAvatarFile(nextFile);
+
+                      if (nextFile) {
+                        setRemoveAvatar(false);
+                      }
+                    }}
+                  />
+                  {profileState.fieldErrors?.avatarFile?.[0] ? (
+                    <span className="text-sm text-red-600">{profileState.fieldErrors.avatarFile[0]}</span>
+                  ) : (
+                    <span className="text-sm text-slate-500">
+                      {avatarFile ? `Ready to upload ${avatarFile.name}` : "No new file selected."}
+                    </span>
+                  )}
+                </label>
+                <label className="mt-7 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={removeAvatar}
+                    onChange={(event) => {
+                      setRemoveAvatar(event.target.checked);
+
+                      if (event.target.checked) {
+                        setAvatarFile(null);
+                      }
+                    }}
+                  />
+                  Remove current avatar
+                </label>
+              </div>
+            </div>
+          </div>
+          <Input
+            label="Full name"
+            error={profileErrors.fullName?.message ?? profileState.fieldErrors?.fullName?.[0]}
+            {...registerProfile("fullName")}
+          />
+          <div className="hidden md:block" />
           <div className="md:col-span-2">
             <Button type="submit" loading={profilePending}>
               Save profile
@@ -114,7 +224,6 @@ export function SettingsForms({ profile }: { profile: Profile }) {
               showToast({ tone: "pending", message: "Updating password..." });
               passwordAction(formData);
             });
-            resetPassword();
           })}
         >
           <Input

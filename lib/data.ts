@@ -6,9 +6,15 @@ import type {
   ActivityItem,
   AnalyticsEvent,
   AuditLog,
+  NotificationWithMeta,
   Profile,
+  ProjectAsset,
+  ProjectAssetWithUrl,
+  ProjectMilestone,
   Project,
   ProjectMember,
+  ProjectTask,
+  ProjectTaskWithAssignee,
   ProjectWithMembers,
   WorkspaceInvite,
   WorkspaceReadiness,
@@ -62,6 +68,52 @@ export const getCurrentProfile = cache(async () => {
   }
 
   return data;
+});
+
+export const getNotifications = cache(async (): Promise<NotificationWithMeta[]> => {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return [];
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(8);
+
+  if (error || !data?.length) {
+    return [];
+  }
+
+  return data.map((notification) => ({
+    ...notification,
+    relativeTime: formatRelativeTime(notification.created_at),
+  }));
+});
+
+export const getUnreadNotificationCount = cache(async (): Promise<number> => {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return 0;
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { count, error } = await supabase
+    .from("notifications")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .is("read_at", null);
+
+  if (error) {
+    return 0;
+  }
+
+  return count ?? 0;
 });
 
 export const getProfiles = cache(async (): Promise<Profile[]> => {
@@ -230,6 +282,71 @@ export async function getProjectActivity(projectId: string): Promise<ActivityIte
   }
 
   return data.map(mapAuditLogToActivity);
+}
+
+export async function getProjectAssets(projectId: string): Promise<ProjectAssetWithUrl[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("project_assets")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false });
+
+  if (error || !data?.length) {
+    return [];
+  }
+
+  return data.map((asset: ProjectAsset) => ({
+    ...asset,
+    publicUrl: supabase.storage.from("project-assets").getPublicUrl(asset.object_path).data.publicUrl,
+  }));
+}
+
+export async function getProjectMilestones(projectId: string): Promise<ProjectMilestone[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("project_milestones")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("due_date", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error || !data?.length) {
+    return [];
+  }
+
+  return data;
+}
+
+export async function getProjectTasks(projectId: string): Promise<ProjectTaskWithAssignee[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data: tasks, error } = await supabase
+    .from("project_tasks")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false });
+
+  if (error || !tasks?.length) {
+    return [];
+  }
+
+  const assigneeIds = Array.from(
+    new Set(
+      tasks
+        .map((task: ProjectTask) => task.assignee_id)
+        .filter((assigneeId): assigneeId is string => Boolean(assigneeId)),
+    ),
+  );
+  const { data: assignees } =
+    assigneeIds.length > 0
+      ? await supabase.from("profiles").select("*").in("id", assigneeIds)
+      : { data: [] as Profile[] };
+  const assigneeMap = new Map((assignees ?? []).map((profile) => [profile.id, profile]));
+
+  return tasks.map((task: ProjectTask) => ({
+    ...task,
+    assignee: task.assignee_id ? assigneeMap.get(task.assignee_id) ?? null : null,
+  }));
 }
 
 export const getWorkspaceReadiness = cache(async (): Promise<WorkspaceReadiness> => {

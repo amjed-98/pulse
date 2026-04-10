@@ -3,7 +3,16 @@ import { notFound } from "next/navigation";
 
 import { ProjectDetailEditor } from "@/components/dashboard/ProjectDetailEditor";
 import { canManageProject } from "@/lib/access";
-import { getCurrentProfile, getCurrentUser, getProfiles, getProjectActivity, getProjectById } from "@/lib/data";
+import {
+  getCurrentProfile,
+  getCurrentUser,
+  getProfiles,
+  getProjectActivity,
+  getProjectAssets,
+  getProjectById,
+  getProjectMilestones,
+  getProjectTasks,
+} from "@/lib/data";
 
 export async function generateMetadata({
   params,
@@ -25,12 +34,15 @@ export default async function ProjectDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [project, user, profile, allProfiles, activity] = await Promise.all([
+  const [project, user, profile, allProfiles, activity, assets, milestones, tasks] = await Promise.all([
     getProjectById(id),
     getCurrentUser(),
     getCurrentProfile(),
     getProfiles(),
     getProjectActivity(id),
+    getProjectAssets(id),
+    getProjectMilestones(id),
+    getProjectTasks(id),
   ]);
 
   if (!project) {
@@ -46,7 +58,15 @@ export default async function ProjectDetailPage({
       <div>
         <p className="text-sm font-medium uppercase tracking-[0.25em] text-slate-400">Project detail</p>
       </div>
-      <ProjectDetailEditor project={project} canManage={canManage} availableMembers={availableMembers} activity={activity} />
+      <ProjectDetailEditor
+        project={project}
+        canManage={canManage}
+        availableMembers={availableMembers}
+        activity={activity}
+        assets={assets}
+        milestones={milestones}
+        tasks={tasks}
+      />
     </div>
   );
 }

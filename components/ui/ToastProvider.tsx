@@ -40,7 +40,24 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const showToast = useCallback((toast: Omit<Toast, "id">) => {
     const id = crypto.randomUUID();
 
-    setToasts((current) => [...current, { ...toast, id }].slice(-4));
+    setToasts((current) => {
+      const duplicate = current.find(
+        (entry) => entry.message === toast.message && entry.tone === toast.tone,
+      );
+
+      if (duplicate) {
+        const existingTimer = timersRef.current.get(duplicate.id);
+
+        if (existingTimer) {
+          window.clearTimeout(existingTimer);
+          timersRef.current.delete(duplicate.id);
+        }
+
+        return [...current.filter((entry) => entry.id !== duplicate.id), { ...toast, id }].slice(-4);
+      }
+
+      return [...current, { ...toast, id }].slice(-4);
+    });
 
     const duration = toast.tone === "pending" ? 2000 : 4000;
     const timer = window.setTimeout(() => {

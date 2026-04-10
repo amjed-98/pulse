@@ -2,6 +2,10 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 
 export type ProfileRole = "admin" | "member" | "viewer";
 export type ProjectStatus = "active" | "paused" | "completed" | "archived";
+export type ProjectTaskStatus = "todo" | "in_progress" | "done";
+export type ProjectTaskPriority = "low" | "medium" | "high";
+export type ProjectMilestoneStatus = "planned" | "in_progress" | "completed";
+export type NotificationType = "info" | "project" | "team" | "system";
 
 export interface Database {
   public: {
@@ -71,6 +75,38 @@ export interface Database {
           },
         ];
       };
+      notifications: {
+        Row: {
+          created_at: string;
+          id: string;
+          message: string;
+          read_at: string | null;
+          target_path: string | null;
+          title: string;
+          type: NotificationType;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          message: string;
+          read_at?: string | null;
+          target_path?: string | null;
+          title: string;
+          type?: NotificationType;
+          user_id: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["notifications"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "notifications_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       profiles: {
         Row: {
           avatar_url: string | null;
@@ -126,6 +162,77 @@ export interface Database {
           },
         ];
       };
+      project_assets: {
+        Row: {
+          asset_type: "cover" | "attachment";
+          content_type: string | null;
+          created_at: string;
+          file_name: string;
+          file_size: number;
+          id: string;
+          object_path: string;
+          project_id: string;
+          uploaded_by: string;
+        };
+        Insert: {
+          asset_type?: "cover" | "attachment";
+          content_type?: string | null;
+          created_at?: string;
+          file_name: string;
+          file_size: number;
+          id?: string;
+          object_path: string;
+          project_id: string;
+          uploaded_by: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["project_assets"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "project_assets_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_assets_uploaded_by_fkey";
+            columns: ["uploaded_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      project_milestones: {
+        Row: {
+          created_at: string;
+          due_date: string | null;
+          id: string;
+          notes: string | null;
+          project_id: string;
+          status: ProjectMilestoneStatus;
+          title: string;
+        };
+        Insert: {
+          created_at?: string;
+          due_date?: string | null;
+          id?: string;
+          notes?: string | null;
+          project_id: string;
+          status?: ProjectMilestoneStatus;
+          title: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["project_milestones"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "project_milestones_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       projects: {
         Row: {
           created_at: string;
@@ -154,6 +261,45 @@ export interface Database {
             columns: ["owner_id"];
             isOneToOne: false;
             referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      project_tasks: {
+        Row: {
+          assignee_id: string | null;
+          created_at: string;
+          due_date: string | null;
+          id: string;
+          priority: ProjectTaskPriority;
+          project_id: string;
+          status: ProjectTaskStatus;
+          title: string;
+        };
+        Insert: {
+          assignee_id?: string | null;
+          created_at?: string;
+          due_date?: string | null;
+          id?: string;
+          priority?: ProjectTaskPriority;
+          project_id: string;
+          status?: ProjectTaskStatus;
+          title: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["project_tasks"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "project_tasks_assignee_id_fkey";
+            columns: ["assignee_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_tasks_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
             referencedColumns: ["id"];
           },
         ];
@@ -204,8 +350,12 @@ export interface Database {
 }
 
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
+export type Notification = Database["public"]["Tables"]["notifications"]["Row"];
 export type Project = Database["public"]["Tables"]["projects"]["Row"];
 export type ProjectMember = Database["public"]["Tables"]["project_members"]["Row"];
+export type ProjectAsset = Database["public"]["Tables"]["project_assets"]["Row"];
+export type ProjectTask = Database["public"]["Tables"]["project_tasks"]["Row"];
+export type ProjectMilestone = Database["public"]["Tables"]["project_milestones"]["Row"];
 export type AnalyticsEvent = Database["public"]["Tables"]["analytics_events"]["Row"];
 export type AuditLog = Database["public"]["Tables"]["audit_logs"]["Row"];
 export type WorkspaceInvite = Database["public"]["Tables"]["workspace_invites"]["Row"];
@@ -238,6 +388,18 @@ export interface ActivityItem {
 
 export interface ProjectWithMembers extends Project {
   members: Profile[];
+}
+
+export interface ProjectAssetWithUrl extends ProjectAsset {
+  publicUrl: string;
+}
+
+export interface ProjectTaskWithAssignee extends ProjectTask {
+  assignee: Profile | null;
+}
+
+export interface NotificationWithMeta extends Notification {
+  relativeTime: string;
 }
 
 export interface CurrentWorkspaceAccess {
@@ -283,6 +445,7 @@ export interface ActionState {
   message?: string;
   errorId?: string;
   fieldErrors?: Record<string, string[] | undefined>;
+  payload?: Json;
 }
 
 export interface AuthFormState extends ActionState {

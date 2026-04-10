@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, startTransition, useActionState } from "react";
+import { useEffect, useRef, useState, startTransition, useActionState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -28,6 +28,7 @@ export function CreateProjectModal({ triggerLabel = "New project" }: { triggerLa
   const [open, setOpen] = useState(false);
   const [state, submitAction, isPending] = useActionState(createProject, initialState);
   const { showToast } = useToast();
+  const lastToastMessageRef = useRef<string | null>(null);
   const {
     register,
     handleSubmit,
@@ -52,7 +53,8 @@ export function CreateProjectModal({ triggerLabel = "New project" }: { triggerLa
   }, [reset, state.success]);
 
   useEffect(() => {
-    if (state.message) {
+    if (state.message && state.message !== lastToastMessageRef.current) {
+      lastToastMessageRef.current = state.message;
       showToast({
         tone: state.success ? "success" : "error",
         message: state.message,
@@ -69,6 +71,7 @@ export function CreateProjectModal({ triggerLabel = "New project" }: { triggerLa
     formData.set("dueDate", values.dueDate ?? "");
 
     startTransition(() => {
+      showToast({ tone: "pending", message: "Creating project..." });
       submitAction(formData);
     });
   });

@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useActionState, useEffect, useState } from "react";
+import { startTransition, useActionState, useEffect, useRef, useState } from "react";
 
 import { removeMember, updateMemberRole } from "@/lib/actions/team";
 import type { ActionState, Profile } from "@/lib/types";
@@ -41,10 +41,18 @@ function TeamMemberRow({
   const [selectedRole, setSelectedRole] = useState<Profile["role"]>(member.role);
   const [confirmingRemoval, setConfirmingRemoval] = useState(false);
   const [confirmation, setConfirmation] = useState("");
+  const lastRoleMessageRef = useRef<string | null>(null);
+  const lastRemoveMessageRef = useRef<string | null>(null);
 
   useEffect(() => {
     setSelectedRole(member.role);
   }, [member.role]);
+
+  useEffect(() => {
+    if (!roleState.success && roleState.message) {
+      setSelectedRole(member.role);
+    }
+  }, [member.role, roleState.message, roleState.success]);
 
   useEffect(() => {
     if (removeState.success) {
@@ -54,7 +62,12 @@ function TeamMemberRow({
   }, [removeState.success]);
 
   useEffect(() => {
-    if (roleState.message && !roleState.fieldErrors?.role?.[0]) {
+    if (
+      roleState.message &&
+      roleState.message !== lastRoleMessageRef.current &&
+      !roleState.fieldErrors?.role?.[0]
+    ) {
+      lastRoleMessageRef.current = roleState.message;
       showToast({
         tone: roleState.success ? "success" : "error",
         message: roleState.message,
@@ -63,7 +76,12 @@ function TeamMemberRow({
   }, [roleState.fieldErrors, roleState.message, roleState.success, showToast]);
 
   useEffect(() => {
-    if (removeState.message && !removeState.fieldErrors?.confirmation?.[0]) {
+    if (
+      removeState.message &&
+      removeState.message !== lastRemoveMessageRef.current &&
+      !removeState.fieldErrors?.confirmation?.[0]
+    ) {
+      lastRemoveMessageRef.current = removeState.message;
       showToast({
         tone: removeState.success ? "success" : "error",
         message: removeState.message,
@@ -104,6 +122,7 @@ function TeamMemberRow({
                 const formData = new FormData();
                 formData.set("role", nextRole);
                 startTransition(() => {
+                  showToast({ tone: "pending", message: `Updating ${member.full_name ?? "member"} role...` });
                   roleAction(formData);
                 });
               }}
@@ -132,6 +151,7 @@ function TeamMemberRow({
               <form
                 action={(formData) => {
                   startTransition(() => {
+                    showToast({ tone: "pending", message: `Removing ${member.full_name ?? "member"}...` });
                     removeAction(formData);
                   });
                 }}

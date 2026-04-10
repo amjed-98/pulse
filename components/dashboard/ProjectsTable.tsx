@@ -23,6 +23,7 @@ type SortKey = "name" | "status" | "due_date";
 export function ProjectsTable({ projects, currentUserId, currentUserRole }: ProjectsTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [isPending, startTransition] = useTransition();
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const { showToast } = useToast();
   const access =
     currentUserId && currentUserRole
@@ -114,14 +115,17 @@ export function ProjectsTable({ projects, currentUserId, currentUserRole }: Proj
                       <Button
                         variant="ghost"
                         size="sm"
-                        loading={isPending}
+                        loading={isPending && activeProjectId === project.id}
                         onClick={() => {
                           if (!window.confirm(`Delete ${project.name}?`)) {
                             return;
                           }
 
                           startTransition(async () => {
+                            setActiveProjectId(project.id);
+                            showToast({ tone: "pending", message: `Deleting ${project.name}...` });
                             const result = await deleteProject(project.id);
+                            setActiveProjectId(null);
                             if (result.message) {
                               showToast({
                                 tone: result.success ? "success" : "error",

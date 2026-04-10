@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useActionState, useEffect } from "react";
+import { startTransition, useActionState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -24,6 +24,7 @@ const initialState: ActionState = {};
 export function TeamInviteForm({ canInvite }: { canInvite: boolean }) {
   const [state, submitAction, isPending] = useActionState(inviteMember, initialState);
   const { showToast } = useToast();
+  const lastToastMessageRef = useRef<string | null>(null);
   const {
     register,
     handleSubmit,
@@ -43,14 +44,23 @@ export function TeamInviteForm({ canInvite }: { canInvite: boolean }) {
     formData.set("role", values.role);
 
     startTransition(() => {
+      showToast({ tone: "pending", message: "Sending invite..." });
       submitAction(formData);
     });
-
-    reset();
   });
 
   useEffect(() => {
-    if (state.message) {
+    if (state.success) {
+      reset({
+        email: "",
+        role: "member",
+      });
+    }
+  }, [reset, state.success]);
+
+  useEffect(() => {
+    if (state.message && state.message !== lastToastMessageRef.current) {
+      lastToastMessageRef.current = state.message;
       showToast({
         tone: state.success ? "success" : "error",
         message: state.message,

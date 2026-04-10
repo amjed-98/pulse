@@ -9,8 +9,10 @@ import { z } from "zod";
 import { recordAnalyticsEvent } from "@/lib/analytics";
 import { createAuditLog } from "@/lib/audit";
 import { toActionErrorState, toAuthErrorState } from "@/lib/logger";
+import { createNotification } from "@/lib/notifications";
 import { requireCurrentWorkspaceAccess } from "@/lib/permissions";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { AVATAR_BUCKET, AVATAR_MIME_TYPES, MAX_AVATAR_FILE_SIZE, buildAvatarObjectPath, extractStorageObjectPath } from "@/lib/storage";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import type { ActionState, AuthFormState } from "@/lib/types";
 
@@ -33,7 +35,6 @@ const signUpSchema = z
 
 const updateProfileSchema = z.object({
   fullName: z.string().min(2, "Full name must be at least 2 characters."),
-  avatarUrl: z.string().url("Enter a valid URL.").or(z.literal("")),
 });
 
 const changePasswordSchema = z
@@ -209,39 +210,113 @@ export async function updateProfile(_: ActionState, formData: FormData): Promise
   try {
     const parsed = updateProfileSchema.safeParse({
       fullName: formData.get("fullName"),
-      avatarUrl: formData.get("avatarUrl"),
     });
 
     if (!parsed.success) {
       return withFieldErrors(parsed.error);
     }
 
+    const avatarFileEntry = formData.get("avatarFile");
+    const avatarFile = avatarFileEntry instanceof File && avatarFileEntry.size > 0 ? avatarFileEntry : null;
+    const removeAvatar = formData.get("removeAvatar") === "true";
+
+    if (avatarFile && avatarFile.size > MAX_AVATAR_FILE_SIZE) {
+      return {
+        success: false,
+        message: "Please correct the highlighted fields.",
+        fieldErrors: {
+          avatarFile: ["Avatar images must be 5 MB or smaller."],
+        },
+      };
+    }
+
+    if (avatarFile && !AVATAR_MIME_TYPES.includes(avatarFile.type as (typeof AVATAR_MIME_TYPES)[number])) {
+      return {
+        success: false,
+        message: "Please correct the highlighted fields.",
+        fieldErrors: {
+          avatarFile: ["Upload a PNG, JPG, WEBP, or GIF image."],
+        },
+      };
+    }
+
     const access = await requireCurrentWorkspaceAccess();
-    const changePasswordRateLimit = await enforceRateLimit({
-      scope: "auth.change-password",
-      limit: 3,
+    const profileUpdateRateLimit = await enforceRateLimit({
+      scope: "auth.update-profile",
+      limit: 8,
       windowMs: 15 * 60 * 1000,
       key: access.userId,
     });
 
-    if (!changePasswordRateLimit.allowed) {
+    if (!profileUpdateRateLimit.allowed) {
       return {
         success: false,
-        message: "Password changes are temporarily locked. Try again later.",
+        message: "Profile updates are temporarily locked. Try again later.",
       };
     }
 
     const supabase = await createSupabaseServerClient();
+    const { data: currentProfile, error: currentProfileError } = await supabase
+      .from("profiles")
+      .select("avatar_url")
+      .eq("id", access.userId)
+      .maybeSingle();
+
+    if (currentProfileError || !currentProfile) {
+      return toActionErrorState({
+        source: "auth.updateProfile",
+        message: "Profile update could not load the current profile.",
+        userMessage: "Could not update the profile right now.",
+        error: currentProfileError ?? new Error("Profile not found."),
+        context: {
+          userId: access.userId,
+        },
+      });
+    }
+
+    const existingAvatarPath = extractStorageObjectPath(currentProfile.avatar_url, AVATAR_BUCKET);
+    let nextAvatarUrl = removeAvatar ? null : currentProfile.avatar_url;
+    let uploadedAvatarPath: string | null = null;
+
+    if (avatarFile) {
+      const avatarObjectPath = buildAvatarObjectPath(access.userId, avatarFile);
+      const uploadResult = await supabase.storage
+        .from(AVATAR_BUCKET)
+        .upload(avatarObjectPath, new Uint8Array(await avatarFile.arrayBuffer()), {
+          cacheControl: "3600",
+          contentType: avatarFile.type,
+          upsert: false,
+        });
+
+      if (uploadResult.error) {
+        return toActionErrorState({
+          source: "auth.updateProfile",
+          message: "Avatar upload failed in Supabase storage.",
+          userMessage: "Could not upload the avatar right now.",
+          error: uploadResult.error,
+          context: {
+            userId: access.userId,
+          },
+        });
+      }
+
+      uploadedAvatarPath = avatarObjectPath;
+      nextAvatarUrl = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(avatarObjectPath).data.publicUrl;
+    }
 
     const { error } = await supabase
       .from("profiles")
       .update({
         full_name: parsed.data.fullName,
-        avatar_url: parsed.data.avatarUrl || null,
+        avatar_url: nextAvatarUrl,
       })
       .eq("id", access.userId);
 
     if (error) {
+      if (uploadedAvatarPath) {
+        await supabase.storage.from(AVATAR_BUCKET).remove([uploadedAvatarPath]);
+      }
+
       return toActionErrorState({
         source: "auth.updateProfile",
         message: "Profile update failed during mutation.",
@@ -260,7 +335,9 @@ export async function updateProfile(_: ActionState, formData: FormData): Promise
       description: "Profile identity details were changed in account settings.",
       metadata: {
         fullName: parsed.data.fullName,
-        avatarUrl: parsed.data.avatarUrl || null,
+        avatarUrl: nextAvatarUrl,
+        avatarUploaded: Boolean(uploadedAvatarPath),
+        avatarRemoved: removeAvatar,
       },
     });
     await recordAnalyticsEvent({
@@ -268,10 +345,27 @@ export async function updateProfile(_: ActionState, formData: FormData): Promise
       eventName: "profile_updated",
       value: 1,
     });
+    await createNotification({
+      userId: access.userId,
+      type: "info",
+      title: "Profile updated",
+      message: "Your account profile details were updated successfully.",
+      targetPath: "/settings",
+    });
+
+    if (existingAvatarPath && (removeAvatar || uploadedAvatarPath)) {
+      await supabase.storage.from(AVATAR_BUCKET).remove([existingAvatarPath]);
+    }
 
     revalidatePath("/settings");
-    revalidatePath("/dashboard");
-    return { success: true, message: "Profile updated." };
+    revalidatePath("/", "layout");
+    return {
+      success: true,
+      message: "Profile updated.",
+      payload: {
+        avatarUrl: nextAvatarUrl,
+      },
+    };
   } catch (error) {
     return toActionErrorState({
       source: "auth.updateProfile",
@@ -321,6 +415,13 @@ export async function changePassword(_: ActionState, formData: FormData): Promis
       userId: access.userId,
       eventName: "password_changed",
       value: 1,
+    });
+    await createNotification({
+      userId: access.userId,
+      type: "system",
+      title: "Password updated",
+      message: "Your account password was changed.",
+      targetPath: "/settings",
     });
 
     return { success: true, message: "Password updated." };

@@ -2,15 +2,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 
 import { signOut } from "@/lib/actions/auth";
-import type { Profile } from "@/lib/types";
+import { markAllNotificationsRead, markNotificationRead } from "@/lib/actions/notifications";
+import type { NotificationWithMeta, Profile } from "@/lib/types";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
+import { useToast } from "@/components/ui/ToastProvider";
 
 interface TopbarProps {
   user: Pick<Profile, "full_name" | "avatar_url">;
+  notifications: NotificationWithMeta[];
+  unreadNotificationCount: number;
   onMenuClick: () => void;
 }
 
@@ -22,9 +26,13 @@ const TITLES: Record<string, string> = {
   "/settings": "Settings",
 };
 
-export function Topbar({ user, onMenuClick }: TopbarProps) {
+export function Topbar({ user, notifications, unreadNotificationCount, onMenuClick }: TopbarProps) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [activeNotificationId, setActiveNotificationId] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   const matched = Object.entries(TITLES).find(([route]) => pathname === route || pathname.startsWith(`${route}/`));
   const title = matched?.[1] ?? "Pulse";
@@ -49,17 +57,118 @@ export function Topbar({ user, onMenuClick }: TopbarProps) {
       </div>
 
       <div className="flex items-center gap-3">
-        <button
-          type="button"
-          className="relative flex size-11 items-center justify-center rounded-2xl border border-[var(--color-border)] bg-white/88 text-slate-600 shadow-[var(--shadow-inset)] transition hover:border-[var(--color-border-strong)] hover:text-slate-950"
-          aria-label="Notifications"
-        >
-          <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.9">
-            <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2c0 .53-.21 1.04-.59 1.4L4 17h5" />
-            <path d="M10 19a2 2 0 0 0 4 0" />
-          </svg>
-          <span className="absolute right-3 top-3 size-2 rounded-full bg-rose-500" />
-        </button>
+        <div className="relative">
+          <button
+            type="button"
+            className="relative flex size-11 items-center justify-center rounded-2xl border border-[var(--color-border)] bg-white/88 text-slate-600 shadow-[var(--shadow-inset)] transition hover:border-[var(--color-border-strong)] hover:text-slate-950"
+            aria-label="Notifications"
+            onClick={() => setNotificationsOpen((open) => !open)}
+          >
+            <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.9">
+              <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2c0 .53-.21 1.04-.59 1.4L4 17h5" />
+              <path d="M10 19a2 2 0 0 0 4 0" />
+            </svg>
+            {unreadNotificationCount > 0 ? (
+              <span className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                {Math.min(unreadNotificationCount, 9)}{unreadNotificationCount > 9 ? "+" : ""}
+              </span>
+            ) : null}
+          </button>
+
+          {notificationsOpen ? (
+            <div className="surface-card absolute right-0 mt-3 w-[22rem] rounded-2xl p-3">
+              <div className="mb-3 flex items-center justify-between gap-3 px-1">
+                <div>
+                  <p className="text-sm font-semibold text-slate-950">Notifications</p>
+                  <p className="text-xs text-slate-500">
+                    {unreadNotificationCount > 0 ? `${unreadNotificationCount} unread updates` : "All caught up"}
+                  </p>
+                </div>
+                {unreadNotificationCount > 0 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    loading={isPending && activeNotificationId === "all"}
+                    onClick={() => {
+                      startTransition(async () => {
+                        setActiveNotificationId("all");
+                        const result = await markAllNotificationsRead();
+                        setActiveNotificationId(null);
+                        if (result.message) {
+                          showToast({
+                            tone: result.success ? "success" : "error",
+                            message: result.message,
+                          });
+                        }
+                      });
+                    }}
+                  >
+                    Mark all read
+                  </Button>
+                ) : null}
+              </div>
+              <div className="space-y-2">
+                {notifications.length > 0 ? (
+                  notifications.map((notification) => (
+                    <div
+                      key={notification.id}
+                      className={`rounded-xl border px-3 py-3 ${
+                        notification.read_at
+                          ? "border-slate-100 bg-white"
+                          : "border-indigo-100 bg-indigo-50/60"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium text-slate-900">{notification.title}</p>
+                          <p className="mt-1 text-sm leading-6 text-slate-500">{notification.message}</p>
+                          <p className="mt-2 text-xs uppercase tracking-[0.2em] text-slate-400">{notification.relativeTime}</p>
+                        </div>
+                        {!notification.read_at ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            loading={isPending && activeNotificationId === notification.id}
+                            onClick={() => {
+                              startTransition(async () => {
+                                setActiveNotificationId(notification.id);
+                                const result = await markNotificationRead(notification.id);
+                                setActiveNotificationId(null);
+                                if (result.message) {
+                                  showToast({
+                                    tone: result.success ? "success" : "error",
+                                    message: result.message,
+                                  });
+                                }
+                              });
+                            }}
+                          >
+                            Read
+                          </Button>
+                        ) : null}
+                      </div>
+                      {notification.target_path ? (
+                        <Link
+                          href={notification.target_path}
+                          className="mt-3 inline-flex text-sm font-medium text-[var(--color-accent)]"
+                          onClick={() => setNotificationsOpen(false)}
+                        >
+                          Open
+                        </Link>
+                      ) : null}
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-5 text-sm leading-7 text-slate-500">
+                    No notifications yet. Team activity, project delivery changes, and account events will appear here.
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </div>
 
         <div className="relative">
           <button

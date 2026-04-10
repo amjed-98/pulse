@@ -6,6 +6,7 @@ import { z } from "zod";
 import { recordAnalyticsEvent } from "@/lib/analytics";
 import { createAuditLog } from "@/lib/audit";
 import { toActionErrorState } from "@/lib/logger";
+import { createNotification, createNotifications } from "@/lib/notifications";
 import { requireAdminAccess } from "@/lib/permissions";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
@@ -136,6 +137,13 @@ export async function inviteMember(_: ActionState, formData: FormData): Promise<
       eventName: "team_invited",
       value: 1,
     });
+    await createNotification({
+      userId: access.userId,
+      type: "team",
+      title: "Invite sent",
+      message: `${parsed.data.email} was invited as ${parsed.data.role}.`,
+      targetPath: "/team",
+    });
 
     revalidatePath("/team");
     revalidatePath("/dashboard");
@@ -249,6 +257,26 @@ export async function updateMemberRole(
       eventName: "team_role_changed",
       value: 1,
     });
+    await createNotifications([
+      {
+        userId: access.userId,
+        type: "team",
+        title: "Member role updated",
+        message: `${member.full_name ?? member.email ?? "A team member"} is now ${parsed.data.role}.`,
+        targetPath: "/team",
+      },
+      ...(member.id !== access.userId
+        ? [
+            {
+              userId: member.id,
+              type: "team" as const,
+              title: "Your role changed",
+              message: `Your workspace role is now ${parsed.data.role}.`,
+              targetPath: "/team",
+            },
+          ]
+        : []),
+    ]);
 
     revalidatePath("/team");
     revalidatePath("/dashboard");

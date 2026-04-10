@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import { revokeInvite } from "@/lib/actions/team";
 import type { WorkspaceInvite } from "@/lib/types";
@@ -23,6 +23,7 @@ export function PendingInvites({
   canManage: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
+  const [activeInviteId, setActiveInviteId] = useState<string | null>(null);
   const { showToast } = useToast();
 
   if (invites.length === 0) {
@@ -57,14 +58,17 @@ export function PendingInvites({
                 type="button"
                 variant="ghost"
                 size="sm"
-                loading={isPending}
+                loading={isPending && activeInviteId === invite.id}
                 onClick={() => {
                   if (!window.confirm(`Revoke the invite for ${invite.email}?`)) {
                     return;
                   }
 
                   startTransition(async () => {
+                    setActiveInviteId(invite.id);
+                    showToast({ tone: "pending", message: `Revoking invite for ${invite.email}...` });
                     const result = await revokeInvite(invite.id);
+                    setActiveInviteId(null);
                     if (result.message) {
                       showToast({
                         tone: result.success ? "success" : "error",

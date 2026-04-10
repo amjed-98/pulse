@@ -1,9 +1,29 @@
 "use client";
 
-import { startTransition, useActionState, useEffect, useState, useTransition } from "react";
+import { startTransition, useActionState, useEffect, useRef, useState, useTransition } from "react";
 
-import { addProjectMember, removeProjectMember, updateProject } from "@/lib/actions/projects";
-import type { ActionState, ActivityItem, Profile, ProjectWithMembers } from "@/lib/types";
+import {
+  addProjectMember,
+  createProjectMilestone,
+  createProjectTask,
+  deleteProjectAsset,
+  deleteProjectMilestone,
+  deleteProjectTask,
+  removeProjectMember,
+  updateProject,
+  updateProjectMilestone,
+  updateProjectTask,
+  uploadProjectAsset,
+} from "@/lib/actions/projects";
+import type {
+  ActionState,
+  ActivityItem,
+  Profile,
+  ProjectAssetWithUrl,
+  ProjectMilestone,
+  ProjectTaskWithAssignee,
+  ProjectWithMembers,
+} from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -16,6 +36,9 @@ interface ProjectDetailEditorProps {
   canManage: boolean;
   availableMembers: Profile[];
   activity: ActivityItem[];
+  assets: ProjectAssetWithUrl[];
+  milestones: ProjectMilestone[];
+  tasks: ProjectTaskWithAssignee[];
 }
 
 const activityTone = {
@@ -30,6 +53,9 @@ export function ProjectDetailEditor({
   canManage,
   availableMembers,
   activity,
+  assets,
+  milestones,
+  tasks,
 }: ProjectDetailEditorProps) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [editingDescription, setEditingDescription] = useState(false);
@@ -42,15 +68,41 @@ export function ProjectDetailEditor({
     addProjectMember.bind(null, project.id),
     initialState,
   );
+  const [assetState, uploadAssetAction, isAssetPending] = useActionState(
+    uploadProjectAsset.bind(null, project.id),
+    initialState,
+  );
+  const [milestoneState, createMilestoneAction, isMilestonePending] = useActionState(
+    createProjectMilestone.bind(null, project.id),
+    initialState,
+  );
+  const [taskState, createTaskAction, isTaskPending] = useActionState(
+    createProjectTask.bind(null, project.id),
+    initialState,
+  );
   const [isRemovingMember, startRemoveTransition] = useTransition();
+  const [isDeletingAsset, startDeleteAssetTransition] = useTransition();
+  const [isUpdatingDelivery, startDeliveryTransition] = useTransition();
   const { showToast } = useToast();
+  const lastProjectMessageRef = useRef<string | null>(null);
+  const lastMemberMessageRef = useRef<string | null>(null);
+  const lastAssetMessageRef = useRef<string | null>(null);
+  const lastMilestoneMessageRef = useRef<string | null>(null);
+  const lastTaskMessageRef = useRef<string | null>(null);
+  const [activeRemovalId, setActiveRemovalId] = useState<string | null>(null);
+  const [activeAssetDeleteId, setActiveAssetDeleteId] = useState<string | null>(null);
+  const [activeMilestoneId, setActiveMilestoneId] = useState<string | null>(null);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const coverAsset = assets.find((asset) => asset.asset_type === "cover") ?? null;
+  const attachmentAssets = assets.filter((asset) => asset.asset_type === "attachment");
 
   useEffect(() => {
     setSelectedMemberId(availableMembers[0]?.id ?? "");
   }, [availableMembers]);
 
   useEffect(() => {
-    if (projectState.message) {
+    if (projectState.message && projectState.message !== lastProjectMessageRef.current) {
+      lastProjectMessageRef.current = projectState.message;
       showToast({
         tone: projectState.success ? "success" : "error",
         message: projectState.message,
@@ -59,13 +111,60 @@ export function ProjectDetailEditor({
   }, [projectState.message, projectState.success, showToast]);
 
   useEffect(() => {
-    if (memberState.message && !memberState.fieldErrors?.userId?.[0]) {
+    if (
+      memberState.message &&
+      memberState.message !== lastMemberMessageRef.current &&
+      !memberState.fieldErrors?.userId?.[0]
+    ) {
+      lastMemberMessageRef.current = memberState.message;
       showToast({
         tone: memberState.success ? "success" : "error",
         message: memberState.message,
       });
     }
   }, [memberState.fieldErrors, memberState.message, memberState.success, showToast]);
+
+  useEffect(() => {
+    if (
+      assetState.message &&
+      assetState.message !== lastAssetMessageRef.current &&
+      !assetState.fieldErrors?.assetFile?.[0]
+    ) {
+      lastAssetMessageRef.current = assetState.message;
+      showToast({
+        tone: assetState.success ? "success" : "error",
+        message: assetState.message,
+      });
+    }
+  }, [assetState.fieldErrors, assetState.message, assetState.success, showToast]);
+
+  useEffect(() => {
+    if (
+      milestoneState.message &&
+      milestoneState.message !== lastMilestoneMessageRef.current &&
+      !milestoneState.fieldErrors?.title?.[0]
+    ) {
+      lastMilestoneMessageRef.current = milestoneState.message;
+      showToast({
+        tone: milestoneState.success ? "success" : "error",
+        message: milestoneState.message,
+      });
+    }
+  }, [milestoneState.fieldErrors, milestoneState.message, milestoneState.success, showToast]);
+
+  useEffect(() => {
+    if (
+      taskState.message &&
+      taskState.message !== lastTaskMessageRef.current &&
+      !taskState.fieldErrors?.title?.[0]
+    ) {
+      lastTaskMessageRef.current = taskState.message;
+      showToast({
+        tone: taskState.success ? "success" : "error",
+        message: taskState.message,
+      });
+    }
+  }, [taskState.fieldErrors, taskState.message, taskState.success, showToast]);
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1.55fr_0.95fr]">
@@ -78,7 +177,10 @@ export function ProjectDetailEditor({
                   onSubmit={(event) => {
                     event.preventDefault();
                     const formData = new FormData(event.currentTarget);
-                    startTransition(() => submitProjectAction(formData));
+                    startTransition(() => {
+                      showToast({ tone: "pending", message: "Saving project title..." });
+                      submitProjectAction(formData);
+                    });
                     setEditingTitle(false);
                   }}
                   className="flex flex-wrap items-center gap-3"
@@ -138,7 +240,10 @@ export function ProjectDetailEditor({
                 onSubmit={(event) => {
                   event.preventDefault();
                   const formData = new FormData(event.currentTarget);
-                  startTransition(() => submitProjectAction(formData));
+                  startTransition(() => {
+                    showToast({ tone: "pending", message: "Saving project description..." });
+                    submitProjectAction(formData);
+                  });
                   setEditingDescription(false);
                 }}
                 className="space-y-3"
@@ -173,6 +278,478 @@ export function ProjectDetailEditor({
             {!canManage ? (
               <p className="text-sm text-slate-500">Only the project owner or an admin can edit this project.</p>
             ) : null}
+          </div>
+        </section>
+
+        <section className="rounded-[1.75rem] border border-white/70 bg-white p-6 shadow-[var(--shadow-card)]">
+          <div className="mb-5">
+            <h2 className="text-lg font-semibold text-slate-950">Delivery plan</h2>
+            <p className="text-sm text-slate-500">Track milestones and execution tasks directly inside the project workspace.</p>
+          </div>
+          <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+            <div className="space-y-4">
+              {canManage ? (
+                <form
+                  action={(formData) => {
+                    startTransition(() => {
+                      showToast({ tone: "pending", message: "Creating milestone..." });
+                      createMilestoneAction(formData);
+                    });
+                  }}
+                  className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4"
+                >
+                  <div className="grid gap-3">
+                    <Input
+                      name="title"
+                      label="New milestone"
+                      placeholder="Launch client review"
+                      error={milestoneState.fieldErrors?.title?.[0]}
+                    />
+                    <Input name="dueDate" label="Due date" type="date" error={milestoneState.fieldErrors?.dueDate?.[0]} />
+                    <label className="flex flex-col gap-2">
+                      <span className="text-sm font-medium text-slate-700">Notes</span>
+                      <textarea
+                        name="notes"
+                        className="min-h-24 rounded-xl border border-[var(--color-border)] px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-[var(--color-accent)] focus:ring-4 focus:ring-indigo-100"
+                        placeholder="What should be complete by this milestone?"
+                      />
+                    </label>
+                    <input type="hidden" name="status" value="planned" />
+                    <div className="flex justify-end">
+                      <Button type="submit" size="sm" loading={isMilestonePending}>
+                        Add milestone
+                      </Button>
+                    </div>
+                  </div>
+                </form>
+              ) : null}
+              <div className="space-y-3">
+                {milestones.length > 0 ? (
+                  milestones.map((milestone) => (
+                    <div key={milestone.id} className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-slate-900">{milestone.title}</p>
+                          <p className="mt-1 text-sm text-slate-500">
+                            Due {milestone.due_date ?? "not set"}
+                          </p>
+                          {milestone.notes ? <p className="mt-2 text-sm leading-6 text-slate-500">{milestone.notes}</p> : null}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            tone={
+                              milestone.status === "completed"
+                                ? "success"
+                                : milestone.status === "in_progress"
+                                  ? "info"
+                                  : "neutral"
+                            }
+                          >
+                            {milestone.status.replace("_", " ")}
+                          </Badge>
+                          {canManage ? (
+                            <>
+                              <select
+                                value={milestone.status}
+                                onChange={(event) => {
+                                  const formData = new FormData();
+                                  formData.set("status", event.target.value);
+                                  startDeliveryTransition(async () => {
+                                    setActiveMilestoneId(milestone.id);
+                                    showToast({ tone: "pending", message: `Updating ${milestone.title}...` });
+                                    const result = await updateProjectMilestone(project.id, milestone.id, {}, formData);
+                                    setActiveMilestoneId(null);
+                                    if (result.message) {
+                                      showToast({
+                                        tone: result.success ? "success" : "error",
+                                        message: result.message,
+                                      });
+                                    }
+                                  });
+                                }}
+                                className="h-10 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm text-slate-900 outline-none focus:border-[var(--color-accent)] focus:ring-4 focus:ring-indigo-100"
+                                disabled={isUpdatingDelivery && activeMilestoneId === milestone.id}
+                              >
+                                <option value="planned">Planned</option>
+                                <option value="in_progress">In progress</option>
+                                <option value="completed">Completed</option>
+                              </select>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                loading={isUpdatingDelivery && activeMilestoneId === milestone.id}
+                                onClick={() => {
+                                  if (!window.confirm(`Delete milestone "${milestone.title}"?`)) {
+                                    return;
+                                  }
+
+                                  startDeliveryTransition(async () => {
+                                    setActiveMilestoneId(milestone.id);
+                                    showToast({ tone: "pending", message: `Deleting ${milestone.title}...` });
+                                    const result = await deleteProjectMilestone(project.id, milestone.id);
+                                    setActiveMilestoneId(null);
+                                    if (result.message) {
+                                      showToast({
+                                        tone: result.success ? "success" : "error",
+                                        message: result.message,
+                                      });
+                                    }
+                                  });
+                                }}
+                              >
+                                Remove
+                              </Button>
+                            </>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-5 text-sm leading-7 text-slate-500">
+                    No milestones yet. Break the project into meaningful delivery checkpoints.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {canManage ? (
+                <form
+                  action={(formData) => {
+                    startTransition(() => {
+                      showToast({ tone: "pending", message: "Creating task..." });
+                      createTaskAction(formData);
+                    });
+                  }}
+                  className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4"
+                >
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <Input
+                      name="title"
+                      label="New task"
+                      placeholder="Draft KPI summary"
+                      error={taskState.fieldErrors?.title?.[0]}
+                    />
+                    <Input name="dueDate" label="Due date" type="date" error={taskState.fieldErrors?.dueDate?.[0]} />
+                    <label className="flex flex-col gap-2">
+                      <span className="text-sm font-medium text-slate-700">Priority</span>
+                      <select
+                        name="priority"
+                        className="h-11 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm text-slate-900 outline-none focus:border-[var(--color-accent)] focus:ring-4 focus:ring-indigo-100"
+                      >
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-2">
+                      <span className="text-sm font-medium text-slate-700">Assignee</span>
+                      <select
+                        name="assigneeId"
+                        className="h-11 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm text-slate-900 outline-none focus:border-[var(--color-accent)] focus:ring-4 focus:ring-indigo-100"
+                      >
+                        <option value="">Unassigned</option>
+                        {project.members.map((member) => (
+                          <option key={member.id} value={member.id}>
+                            {member.full_name ?? member.email ?? member.id}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <input type="hidden" name="status" value="todo" />
+                  </div>
+                  <div className="mt-3 flex justify-end">
+                    <Button type="submit" size="sm" loading={isTaskPending}>
+                      Add task
+                    </Button>
+                  </div>
+                </form>
+              ) : null}
+              <div className="space-y-3">
+                {tasks.length > 0 ? (
+                  tasks.map((task) => (
+                    <div key={task.id} className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-slate-900">{task.title}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+                            <span>Due {task.due_date ?? "not set"}</span>
+                            <span>•</span>
+                            <span>{task.assignee?.full_name ?? task.assignee?.email ?? "Unassigned"}</span>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge tone={task.priority === "high" ? "warning" : task.priority === "medium" ? "info" : "neutral"}>
+                            {task.priority}
+                          </Badge>
+                          <select
+                            value={task.status}
+                            onChange={(event) => {
+                              const formData = new FormData();
+                              formData.set("status", event.target.value);
+                              startDeliveryTransition(async () => {
+                                setActiveTaskId(task.id);
+                                showToast({ tone: "pending", message: `Updating ${task.title}...` });
+                                const result = await updateProjectTask(project.id, task.id, {}, formData);
+                                setActiveTaskId(null);
+                                if (result.message) {
+                                  showToast({
+                                    tone: result.success ? "success" : "error",
+                                    message: result.message,
+                                  });
+                                }
+                              });
+                            }}
+                            className="h-10 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm text-slate-900 outline-none focus:border-[var(--color-accent)] focus:ring-4 focus:ring-indigo-100"
+                            disabled={!canManage || (isUpdatingDelivery && activeTaskId === task.id)}
+                          >
+                            <option value="todo">To do</option>
+                            <option value="in_progress">In progress</option>
+                            <option value="done">Done</option>
+                          </select>
+                          {canManage ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              loading={isUpdatingDelivery && activeTaskId === task.id}
+                              onClick={() => {
+                                if (!window.confirm(`Delete task "${task.title}"?`)) {
+                                  return;
+                                }
+
+                                startDeliveryTransition(async () => {
+                                  setActiveTaskId(task.id);
+                                  showToast({ tone: "pending", message: `Deleting ${task.title}...` });
+                                  const result = await deleteProjectTask(project.id, task.id);
+                                  setActiveTaskId(null);
+                                  if (result.message) {
+                                    showToast({
+                                      tone: result.success ? "success" : "error",
+                                      message: result.message,
+                                    });
+                                  }
+                                });
+                              }}
+                            >
+                              Remove
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-5 text-sm leading-7 text-slate-500">
+                    No delivery tasks yet. Add the execution work that turns this project into a believable operating workspace.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-[1.75rem] border border-white/70 bg-white p-6 shadow-[var(--shadow-card)]">
+          <div className="mb-5">
+            <h2 className="text-lg font-semibold text-slate-950">Project assets</h2>
+            <p className="text-sm text-slate-500">Keep a real cover image and working files attached to the project brief.</p>
+          </div>
+          <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+            <div className="space-y-4">
+              <div className="overflow-hidden rounded-[1.5rem] border border-slate-100 bg-slate-50/80">
+                {coverAsset ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={coverAsset.publicUrl} alt={`${project.name} cover`} className="h-64 w-full object-cover" />
+                ) : (
+                  <div className="flex h-64 items-center justify-center bg-[radial-gradient(circle_at_top_left,_rgba(79,70,229,0.14),_transparent_45%),linear-gradient(135deg,_rgba(15,23,42,0.96),_rgba(30,41,59,0.88))] p-8 text-center">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-indigo-200">Cover image</p>
+                      <p className="mt-3 text-lg font-semibold text-white">No cover uploaded yet</p>
+                      <p className="mt-2 max-w-sm text-sm leading-6 text-slate-300">
+                        Add a project cover to make delivery pages feel like a real client workspace.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+              {coverAsset ? (
+                <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-slate-900">{coverAsset.file_name}</p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        {(coverAsset.file_size / (1024 * 1024)).toFixed(2)} MB cover image
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <a href={coverAsset.publicUrl} target="_blank" rel="noreferrer">
+                        <Button type="button" variant="secondary" size="sm">
+                          Open
+                        </Button>
+                      </a>
+                      {canManage ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          loading={isDeletingAsset && activeAssetDeleteId === coverAsset.id}
+                          onClick={() => {
+                            if (!window.confirm("Delete the project cover image?")) {
+                              return;
+                            }
+
+                            startDeleteAssetTransition(async () => {
+                              setActiveAssetDeleteId(coverAsset.id);
+                              showToast({ tone: "pending", message: "Removing project cover..." });
+                              const result = await deleteProjectAsset(project.id, coverAsset.id);
+                              setActiveAssetDeleteId(null);
+                              if (result.message) {
+                                showToast({
+                                  tone: result.success ? "success" : "error",
+                                  message: result.message,
+                                });
+                              }
+                            });
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="space-y-4">
+              {canManage ? (
+                <>
+                  <form
+                    action={(formData) => {
+                      formData.set("assetType", "cover");
+                      startTransition(() => {
+                        showToast({ tone: "pending", message: "Uploading project cover..." });
+                        uploadAssetAction(formData);
+                      });
+                    }}
+                    className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4"
+                  >
+                    <label className="flex flex-col gap-2">
+                      <span className="text-sm font-medium text-slate-700">Update cover image</span>
+                      <input
+                        type="file"
+                        name="assetFile"
+                        accept="image/png,image/jpeg,image/webp,image/gif"
+                        className="block h-11 w-full rounded-xl border border-[var(--color-border)] bg-white px-3.5 py-2 text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-950 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white"
+                      />
+                    </label>
+                    {assetState.fieldErrors?.assetFile?.[0] ? (
+                      <p className="mt-2 text-sm text-red-600">{assetState.fieldErrors.assetFile[0]}</p>
+                    ) : null}
+                    <div className="mt-3 flex justify-end">
+                      <Button type="submit" size="sm" loading={isAssetPending}>
+                        Upload cover
+                      </Button>
+                    </div>
+                  </form>
+
+                  <form
+                    action={(formData) => {
+                      formData.set("assetType", "attachment");
+                      startTransition(() => {
+                        showToast({ tone: "pending", message: "Uploading attachment..." });
+                        uploadAssetAction(formData);
+                      });
+                    }}
+                    className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4"
+                  >
+                    <label className="flex flex-col gap-2">
+                      <span className="text-sm font-medium text-slate-700">Upload attachment</span>
+                      <input
+                        type="file"
+                        name="assetFile"
+                        accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.csv,.md,.txt,.docx,.xlsx,.ppt,.pptx"
+                        className="block h-11 w-full rounded-xl border border-[var(--color-border)] bg-white px-3.5 py-2 text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-950 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white"
+                      />
+                    </label>
+                    {assetState.fieldErrors?.assetFile?.[0] ? (
+                      <p className="mt-2 text-sm text-red-600">{assetState.fieldErrors.assetFile[0]}</p>
+                    ) : (
+                      <p className="mt-2 text-sm text-slate-500">Upload briefs, reports, screenshots, and working docs up to 20 MB.</p>
+                    )}
+                    <div className="mt-3 flex justify-end">
+                      <Button type="submit" size="sm" loading={isAssetPending}>
+                        Upload file
+                      </Button>
+                    </div>
+                  </form>
+                </>
+              ) : null}
+
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h3 className="font-medium text-slate-900">Attachments</h3>
+                  <Badge tone="info">{attachmentAssets.length}</Badge>
+                </div>
+                {attachmentAssets.length > 0 ? (
+                  <div className="space-y-3">
+                    {attachmentAssets.map((asset) => (
+                      <div key={asset.id} className="rounded-xl border border-slate-100 bg-white px-4 py-3">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-slate-900">{asset.file_name}</p>
+                            <p className="mt-1 text-sm text-slate-500">
+                              {(asset.file_size / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <a href={asset.publicUrl} target="_blank" rel="noreferrer">
+                              <Button type="button" variant="secondary" size="sm">
+                                Open
+                              </Button>
+                            </a>
+                            {canManage ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                loading={isDeletingAsset && activeAssetDeleteId === asset.id}
+                                onClick={() => {
+                                  if (!window.confirm(`Delete ${asset.file_name}?`)) {
+                                    return;
+                                  }
+
+                                  startDeleteAssetTransition(async () => {
+                                    setActiveAssetDeleteId(asset.id);
+                                    showToast({ tone: "pending", message: `Removing ${asset.file_name}...` });
+                                    const result = await deleteProjectAsset(project.id, asset.id);
+                                    setActiveAssetDeleteId(null);
+                                    if (result.message) {
+                                      showToast({
+                                        tone: result.success ? "success" : "error",
+                                        message: result.message,
+                                      });
+                                    }
+                                  });
+                                }}
+                              >
+                                Remove
+                              </Button>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm leading-7 text-slate-500">
+                    No attachments yet. Upload project docs, exports, or visual references here.
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         </section>
 
@@ -217,6 +794,7 @@ export function ProjectDetailEditor({
             <form
               action={(formData) => {
                 startTransition(() => {
+                  showToast({ tone: "pending", message: "Adding collaborator..." });
                   addMemberAction(formData);
                 });
               }}
@@ -273,14 +851,20 @@ export function ProjectDetailEditor({
                         type="button"
                         variant="ghost"
                         size="sm"
-                        loading={isRemovingMember}
+                        loading={isRemovingMember && activeRemovalId === member.id}
                         onClick={() => {
                           if (!window.confirm(`Remove ${member.full_name ?? member.email ?? "this collaborator"} from the project?`)) {
                             return;
                           }
 
                           startRemoveTransition(async () => {
+                            setActiveRemovalId(member.id);
+                            showToast({
+                              tone: "pending",
+                              message: `Removing ${member.full_name ?? member.email ?? "collaborator"}...`,
+                            });
                             const result = await removeProjectMember(project.id, member.id);
+                            setActiveRemovalId(null);
                             if (result.message) {
                               showToast({
                                 tone: result.success ? "success" : "error",
