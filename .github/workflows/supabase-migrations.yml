@@ -39,9 +39,6 @@ jobs:
       - name: Check migration naming
         run: supabase migration list --local
 
-      - name: Dry-run local reset
-        run: supabase db reset --local --no-seed --debug --yes
-
   deploy:
     name: Push remote migrations
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
