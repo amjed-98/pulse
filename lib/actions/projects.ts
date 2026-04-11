@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { recordAnalyticsEvent } from "@/lib/analytics";
 import { createAuditLog } from "@/lib/audit";
+import { getStorageLimitBytes, getWorkspaceBillingSummary } from "@/lib/billing";
 import { toActionErrorState } from "@/lib/logger";
 import { createNotification, createNotifications } from "@/lib/notifications";
 import { requireCurrentWorkspaceAccess } from "@/lib/permissions";
@@ -47,6 +48,11 @@ const taskSchema = z.object({
   priority: z.enum(["low", "medium", "high"]),
   assigneeId: z.string().uuid("Select a valid assignee.").optional().or(z.literal("")),
   dueDate: z.string().optional(),
+});
+
+const commentSchema = z.object({
+  body: z.string().trim().min(1, "Comment cannot be empty.").max(2000, "Comment must be 2000 characters or fewer."),
+  taskId: z.string().uuid("Select a valid task.").optional().or(z.literal("")),
 });
 
 function mapErrors(error: z.ZodError): ActionState {
@@ -129,6 +135,14 @@ export async function createProject(_: ActionState, formData: FormData): Promise
 
     const supabase = await createSupabaseServerClient();
     const access = await requireCurrentWorkspaceAccess();
+    const billing = await getWorkspaceBillingSummary(access.userId);
+
+    if (billing.usage.projectsUsed >= billing.plan.limits.projects) {
+      return {
+        success: false,
+        message: `The ${billing.plan.name} plan supports up to ${billing.plan.limits.projects} projects. Upgrade to add more.`,
+      };
+    }
 
     const { data: project, error } = await supabase
       .from("projects")
@@ -696,6 +710,16 @@ export async function uploadProjectAsset(
 
     if (error || !project) {
       return error ?? { success: false, message: "Project not found or you no longer have access." };
+    }
+
+    const billing = await getWorkspaceBillingSummary(access.userId);
+    const storageLimitBytes = getStorageLimitBytes(billing.billing.plan);
+
+    if (billing.usage.storageBytesUsed + assetFile.size > storageLimitBytes) {
+      return {
+        success: false,
+        message: `${billing.plan.name} includes ${billing.plan.limits.storageMb} MB of file storage. Upgrade to upload more assets.`,
+      };
     }
 
     let previousCoverObjectPath: string | null = null;
@@ -1385,6 +1409,182 @@ export async function deleteProjectTask(projectId: string, taskId: string): Prom
       userMessage: "Could not delete the task right now.",
       error,
       context: { projectId, taskId },
+    });
+  }
+}
+
+export async function createProjectComment(
+  projectId: string,
+  _: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    const parsed = commentSchema.safeParse({
+      body: formData.get("body"),
+      taskId: formData.get("taskId") ?? "",
+    });
+
+    if (!parsed.success) {
+      return mapErrors(parsed.error);
+    }
+
+    const supabase = await createSupabaseServerClient();
+    const access = await requireCurrentWorkspaceAccess();
+    const { data: project, error: projectError } = await supabase
+      .from("projects")
+      .select("id,name")
+      .eq("id", projectId)
+      .maybeSingle();
+
+    if (projectError) {
+      return toActionErrorState({
+        source: "projects.createProjectComment",
+        message: "Project lookup failed before comment insert.",
+        userMessage: "Could not post the comment right now.",
+        error: projectError,
+        context: { projectId, userId: access.userId },
+      });
+    }
+
+    if (!project) {
+      return { success: false, message: "Project not found or you no longer have access." };
+    }
+
+    const { error } = await supabase.from("project_comments").insert({
+      project_id: projectId,
+      task_id: parsed.data.taskId || null,
+      author_id: access.userId,
+      body: parsed.data.body,
+    });
+
+    if (error) {
+      return toActionErrorState({
+        source: "projects.createProjectComment",
+        message: "Project comment insert failed during mutation.",
+        userMessage: "Could not post the comment right now.",
+        error,
+        context: { projectId, userId: access.userId, taskId: parsed.data.taskId || null },
+      });
+    }
+
+    await createAuditLog({
+      actorId: access.userId,
+      projectId,
+      eventType: "project.updated",
+      title: `Commented on ${project.name}`,
+      description: "A new project discussion comment was posted.",
+      metadata: {
+        taskId: parsed.data.taskId || null,
+      },
+    });
+    await recordAnalyticsEvent({
+      userId: access.userId,
+      eventName: "project_comment_created",
+      value: 1,
+    });
+    await createNotification({
+      userId: access.userId,
+      type: "project",
+      title: "Comment posted",
+      message: `Your comment was added to ${project.name}.`,
+      targetPath: `/projects/${projectId}`,
+    });
+
+    revalidatePath(`/projects/${projectId}`);
+    return { success: true, message: "Comment posted." };
+  } catch (error) {
+    return toActionErrorState({
+      source: "projects.createProjectComment",
+      message: "Unexpected failure while creating project comment.",
+      userMessage: "Could not post the comment right now.",
+      error,
+      context: { projectId },
+    });
+  }
+}
+
+export async function deleteProjectComment(projectId: string, commentId: string): Promise<ActionState> {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const access = await requireCurrentWorkspaceAccess();
+    const { data: comment, error: commentError } = await supabase
+      .from("project_comments")
+      .select("id,author_id,body")
+      .eq("project_id", projectId)
+      .eq("id", commentId)
+      .maybeSingle();
+
+    if (commentError) {
+      return toActionErrorState({
+        source: "projects.deleteProjectComment",
+        message: "Project comment lookup failed before delete.",
+        userMessage: "Could not delete the comment right now.",
+        error: commentError,
+        context: { projectId, commentId, userId: access.userId },
+      });
+    }
+
+    if (!comment) {
+      return { success: false, message: "Comment not found or already removed." };
+    }
+
+    const { data: project } = await supabase
+      .from("projects")
+      .select("id,name,owner_id")
+      .eq("id", projectId)
+      .maybeSingle();
+
+    if (!project) {
+      return { success: false, message: "Project not found or you no longer have access." };
+    }
+
+    const canDelete = access.role === "admin" || project.owner_id === access.userId || comment.author_id === access.userId;
+
+    if (!canDelete) {
+      return { success: false, message: "Only the author, project owner, or an admin can remove comments." };
+    }
+
+    const { error } = await supabase
+      .from("project_comments")
+      .delete()
+      .eq("project_id", projectId)
+      .eq("id", commentId);
+
+    if (error) {
+      return toActionErrorState({
+        source: "projects.deleteProjectComment",
+        message: "Project comment delete failed during mutation.",
+        userMessage: "Could not delete the comment right now.",
+        error,
+        context: { projectId, commentId, userId: access.userId },
+      });
+    }
+
+    await createAuditLog({
+      actorId: access.userId,
+      projectId,
+      eventType: "project.updated",
+      title: `Removed comment from ${project.name}`,
+      description: "A project discussion comment was removed.",
+      metadata: {
+        commentId,
+      },
+    });
+    await recordAnalyticsEvent({
+      userId: access.userId,
+      eventName: "project_comment_deleted",
+      value: 1,
+    });
+
+    revalidatePath(`/projects/${projectId}`);
+    return { success: true, message: "Comment deleted." };
+  } catch (error) {
+    return toActionErrorState({
+      source: "projects.deleteProjectComment",
+      message: "Unexpected failure while deleting project comment.",
+      userMessage: "Could not delete the comment right now.",
+      error,
+      context: { projectId, commentId },
     });
   }
 }

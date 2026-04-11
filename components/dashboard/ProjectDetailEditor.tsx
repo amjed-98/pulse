@@ -5,8 +5,10 @@ import { startTransition, useActionState, useEffect, useRef, useState, useTransi
 import {
   addProjectMember,
   createProjectMilestone,
+  createProjectComment,
   createProjectTask,
   deleteProjectAsset,
+  deleteProjectComment,
   deleteProjectMilestone,
   deleteProjectTask,
   removeProjectMember,
@@ -20,6 +22,7 @@ import type {
   ActivityItem,
   Profile,
   ProjectAssetWithUrl,
+  ProjectCommentWithAuthor,
   ProjectMilestone,
   ProjectTaskWithAssignee,
   ProjectWithMembers,
@@ -34,11 +37,13 @@ const initialState: ActionState = {};
 interface ProjectDetailEditorProps {
   project: ProjectWithMembers;
   canManage: boolean;
+  currentUserId: string | null;
   availableMembers: Profile[];
   activity: ActivityItem[];
   assets: ProjectAssetWithUrl[];
   milestones: ProjectMilestone[];
   tasks: ProjectTaskWithAssignee[];
+  comments: ProjectCommentWithAuthor[];
 }
 
 const activityTone = {
@@ -51,11 +56,13 @@ const activityTone = {
 export function ProjectDetailEditor({
   project,
   canManage,
+  currentUserId,
   availableMembers,
   activity,
   assets,
   milestones,
   tasks,
+  comments,
 }: ProjectDetailEditorProps) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [editingDescription, setEditingDescription] = useState(false);
@@ -80,19 +87,26 @@ export function ProjectDetailEditor({
     createProjectTask.bind(null, project.id),
     initialState,
   );
+  const [commentState, createCommentAction, isCommentPending] = useActionState(
+    createProjectComment.bind(null, project.id),
+    initialState,
+  );
   const [isRemovingMember, startRemoveTransition] = useTransition();
   const [isDeletingAsset, startDeleteAssetTransition] = useTransition();
   const [isUpdatingDelivery, startDeliveryTransition] = useTransition();
+  const [isDeletingComment, startCommentDeleteTransition] = useTransition();
   const { showToast } = useToast();
   const lastProjectMessageRef = useRef<string | null>(null);
   const lastMemberMessageRef = useRef<string | null>(null);
   const lastAssetMessageRef = useRef<string | null>(null);
   const lastMilestoneMessageRef = useRef<string | null>(null);
   const lastTaskMessageRef = useRef<string | null>(null);
+  const lastCommentMessageRef = useRef<string | null>(null);
   const [activeRemovalId, setActiveRemovalId] = useState<string | null>(null);
   const [activeAssetDeleteId, setActiveAssetDeleteId] = useState<string | null>(null);
   const [activeMilestoneId, setActiveMilestoneId] = useState<string | null>(null);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
   const coverAsset = assets.find((asset) => asset.asset_type === "cover") ?? null;
   const attachmentAssets = assets.filter((asset) => asset.asset_type === "attachment");
 
@@ -165,6 +179,20 @@ export function ProjectDetailEditor({
       });
     }
   }, [taskState.fieldErrors, taskState.message, taskState.success, showToast]);
+
+  useEffect(() => {
+    if (
+      commentState.message &&
+      commentState.message !== lastCommentMessageRef.current &&
+      !commentState.fieldErrors?.body?.[0]
+    ) {
+      lastCommentMessageRef.current = commentState.message;
+      showToast({
+        tone: commentState.success ? "success" : "error",
+        message: commentState.message,
+      });
+    }
+  }, [commentState.fieldErrors, commentState.message, commentState.success, showToast]);
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1.55fr_0.95fr]">
@@ -547,6 +575,114 @@ export function ProjectDetailEditor({
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-[1.75rem] border border-white/70 bg-white p-6 shadow-[var(--shadow-card)]">
+          <div className="mb-5">
+            <h2 className="text-lg font-semibold text-slate-950">Discussion</h2>
+            <p className="text-sm text-slate-500">Capture delivery notes, clarifications, and task-linked conversation inside the project.</p>
+          </div>
+          <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
+            <form
+              action={(formData) => {
+                startTransition(() => {
+                  showToast({ tone: "pending", message: "Posting comment..." });
+                  createCommentAction(formData);
+                });
+              }}
+              className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4"
+            >
+              <div className="space-y-3">
+                <label className="flex flex-col gap-2">
+                  <span className="text-sm font-medium text-slate-700">Comment</span>
+                  <textarea
+                    name="body"
+                    className="min-h-32 rounded-xl border border-[var(--color-border)] px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-[var(--color-accent)] focus:ring-4 focus:ring-indigo-100"
+                    placeholder="Share project context, blockers, decisions, or next steps."
+                  />
+                </label>
+                {commentState.fieldErrors?.body?.[0] ? (
+                  <p className="text-sm text-red-600">{commentState.fieldErrors.body[0]}</p>
+                ) : null}
+                <label className="flex flex-col gap-2">
+                  <span className="text-sm font-medium text-slate-700">Link to task</span>
+                  <select
+                    name="taskId"
+                    className="h-11 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm text-slate-900 outline-none focus:border-[var(--color-accent)] focus:ring-4 focus:ring-indigo-100"
+                  >
+                    <option value="">Project-wide note</option>
+                    {tasks.map((task) => (
+                      <option key={task.id} value={task.id}>
+                        {task.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="flex justify-end">
+                  <Button type="submit" size="sm" loading={isCommentPending}>
+                    Post comment
+                  </Button>
+                </div>
+              </div>
+            </form>
+
+            <div className="space-y-3">
+              {comments.length > 0 ? (
+                comments.map((comment) => (
+                  <article key={comment.id} className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium text-slate-900">
+                            {comment.author?.full_name ?? comment.author?.email ?? "Workspace member"}
+                          </p>
+                          <span className="text-xs uppercase tracking-[0.18em] text-slate-400">{comment.relativeTime}</span>
+                          {comment.task_id ? (
+                            <Badge tone="info">
+                              {tasks.find((task) => task.id === comment.task_id)?.title ?? "Task thread"}
+                            </Badge>
+                          ) : null}
+                        </div>
+                        <p className="mt-3 text-sm leading-7 text-slate-600">{comment.body}</p>
+                      </div>
+                      {(canManage || comment.author_id === currentUserId) ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          loading={isDeletingComment && activeCommentId === comment.id}
+                          onClick={() => {
+                            if (!window.confirm("Delete this comment?")) {
+                              return;
+                            }
+
+                            startCommentDeleteTransition(async () => {
+                              setActiveCommentId(comment.id);
+                              showToast({ tone: "pending", message: "Removing comment..." });
+                              const result = await deleteProjectComment(project.id, comment.id);
+                              setActiveCommentId(null);
+                              if (result.message) {
+                                showToast({
+                                  tone: result.success ? "success" : "error",
+                                  message: result.message,
+                                });
+                              }
+                            });
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      ) : null}
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-5 text-sm leading-7 text-slate-500">
+                  No discussion yet. Use comments to capture decisions, delivery notes, and task context.
+                </div>
+              )}
             </div>
           </div>
         </section>

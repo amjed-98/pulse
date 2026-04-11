@@ -6,6 +6,7 @@ export type ProjectTaskStatus = "todo" | "in_progress" | "done";
 export type ProjectTaskPriority = "low" | "medium" | "high";
 export type ProjectMilestoneStatus = "planned" | "in_progress" | "completed";
 export type NotificationType = "info" | "project" | "team" | "system";
+export type WorkspacePlan = "starter" | "growth" | "scale";
 
 export interface Database {
   public: {
@@ -107,6 +108,36 @@ export interface Database {
           },
         ];
       };
+      workspace_billing: {
+        Row: {
+          created_at: string;
+          id: string;
+          owner_id: string;
+          plan: WorkspacePlan;
+          status: "active" | "past_due" | "trialing";
+          trial_ends_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          owner_id: string;
+          plan?: WorkspacePlan;
+          status?: "active" | "past_due" | "trialing";
+          trial_ends_at?: string | null;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["workspace_billing"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "workspace_billing_owner_id_fkey";
+            columns: ["owner_id"];
+            isOneToOne: true;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       profiles: {
         Row: {
           avatar_url: string | null;
@@ -199,6 +230,48 @@ export interface Database {
             columns: ["uploaded_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      project_comments: {
+        Row: {
+          author_id: string;
+          body: string;
+          created_at: string;
+          id: string;
+          project_id: string;
+          task_id: string | null;
+        };
+        Insert: {
+          author_id: string;
+          body: string;
+          created_at?: string;
+          id?: string;
+          project_id: string;
+          task_id?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["project_comments"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "project_comments_author_id_fkey";
+            columns: ["author_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_comments_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_comments_task_id_fkey";
+            columns: ["task_id"];
+            isOneToOne: false;
+            referencedRelation: "project_tasks";
             referencedColumns: ["id"];
           },
         ];
@@ -354,11 +427,13 @@ export type Notification = Database["public"]["Tables"]["notifications"]["Row"];
 export type Project = Database["public"]["Tables"]["projects"]["Row"];
 export type ProjectMember = Database["public"]["Tables"]["project_members"]["Row"];
 export type ProjectAsset = Database["public"]["Tables"]["project_assets"]["Row"];
+export type ProjectComment = Database["public"]["Tables"]["project_comments"]["Row"];
 export type ProjectTask = Database["public"]["Tables"]["project_tasks"]["Row"];
 export type ProjectMilestone = Database["public"]["Tables"]["project_milestones"]["Row"];
 export type AnalyticsEvent = Database["public"]["Tables"]["analytics_events"]["Row"];
 export type AuditLog = Database["public"]["Tables"]["audit_logs"]["Row"];
 export type WorkspaceInvite = Database["public"]["Tables"]["workspace_invites"]["Row"];
+export type WorkspaceBilling = Database["public"]["Tables"]["workspace_billing"]["Row"];
 
 export interface RevenueDatum {
   month: string;
@@ -398,8 +473,37 @@ export interface ProjectTaskWithAssignee extends ProjectTask {
   assignee: Profile | null;
 }
 
+export interface ProjectCommentWithAuthor extends ProjectComment {
+  author: Profile | null;
+  relativeTime: string;
+}
+
 export interface NotificationWithMeta extends Notification {
   relativeTime: string;
+}
+
+export interface BillingPlanDefinition {
+  id: WorkspacePlan;
+  name: string;
+  priceLabel: string;
+  description: string;
+  limits: {
+    projects: number;
+    members: number;
+    storageMb: number;
+  };
+}
+
+export interface WorkspaceUsage {
+  projectsUsed: number;
+  membersUsed: number;
+  storageBytesUsed: number;
+}
+
+export interface WorkspaceBillingSummary {
+  billing: WorkspaceBilling;
+  plan: BillingPlanDefinition;
+  usage: WorkspaceUsage;
 }
 
 export interface CurrentWorkspaceAccess {

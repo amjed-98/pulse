@@ -1,6 +1,7 @@
 import type {
   ActivityItem,
   AnalyticsEvent,
+  BillingPlanDefinition,
   DashboardStat,
   Profile,
   ProjectWithMembers,
@@ -80,6 +81,42 @@ export const DASHBOARD_STATS: DashboardStat[] = [
     icon: "tasks",
   },
 ];
+
+export const BILLING_PLANS: Record<"starter" | "growth" | "scale", BillingPlanDefinition> = {
+  starter: {
+    id: "starter",
+    name: "Starter",
+    priceLabel: "$0",
+    description: "Portfolio-friendly plan for a small live workspace and lightweight collaboration.",
+    limits: {
+      projects: 5,
+      members: 5,
+      storageMb: 250,
+    },
+  },
+  growth: {
+    id: "growth",
+    name: "Growth",
+    priceLabel: "$49/mo",
+    description: "Balanced operating plan for active teams shipping across multiple workstreams.",
+    limits: {
+      projects: 20,
+      members: 15,
+      storageMb: 2048,
+    },
+  },
+  scale: {
+    id: "scale",
+    name: "Scale",
+    priceLabel: "$199/mo",
+    description: "High-capacity plan for asset-heavy delivery and broader team collaboration.",
+    limits: {
+      projects: 100,
+      members: 50,
+      storageMb: 10240,
+    },
+  },
+};
 
 const seedTeam: Profile[] = [
   {

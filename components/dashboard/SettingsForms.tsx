@@ -6,8 +6,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
 import { changePassword, deleteAccount, updateProfile } from "@/lib/actions/auth";
-import type { ActionState, Profile } from "@/lib/types";
+import { updateWorkspacePlan } from "@/lib/actions/billing";
+import { BILLING_PLANS } from "@/lib/constants";
+import type { ActionState, Profile, WorkspaceBillingSummary } from "@/lib/types";
 import { Avatar } from "@/components/ui/Avatar";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -28,10 +31,17 @@ const passwordSchema = z
 
 const initialState: ActionState = {};
 
-export function SettingsForms({ profile }: { profile: Profile }) {
+export function SettingsForms({
+  profile,
+  billing,
+}: {
+  profile: Profile;
+  billing: WorkspaceBillingSummary | null;
+}) {
   const [profileState, profileAction, profilePending] = useActionState(updateProfile, initialState);
   const [passwordState, passwordAction, passwordPending] = useActionState(changePassword, initialState);
   const [deleteState, deleteAction, deletePending] = useActionState(deleteAccount, initialState);
+  const [billingState, billingAction, billingPending] = useActionState(updateWorkspacePlan, initialState);
   const { showToast } = useToast();
   const lastToastMessageRef = useRef<string | null>(null);
   const [persistedAvatarUrl, setPersistedAvatarUrl] = useState<string | null>(profile.avatar_url);
@@ -105,7 +115,7 @@ export function SettingsForms({ profile }: { profile: Profile }) {
   }, [passwordState.success, resetPassword]);
 
   useEffect(() => {
-    const nextState = [profileState, passwordState, deleteState].find((state) => state.message);
+    const nextState = [profileState, passwordState, deleteState, billingState].find((state) => state.message);
 
     if (nextState?.message && nextState.message !== lastToastMessageRef.current) {
       lastToastMessageRef.current = nextState.message;
@@ -114,7 +124,7 @@ export function SettingsForms({ profile }: { profile: Profile }) {
         message: nextState.message,
       });
     }
-  }, [deleteState, passwordState, profileState, showToast]);
+  }, [billingState, deleteState, passwordState, profileState, showToast]);
 
   return (
     <div className="space-y-6">
@@ -207,6 +217,110 @@ export function SettingsForms({ profile }: { profile: Profile }) {
             </Button>
           </div>
         </form>
+      </section>
+
+      <section className="rounded-[1.75rem] border border-white/70 bg-white p-6 shadow-[var(--shadow-card)]">
+        <div className="mb-5">
+          <h2 className="text-lg font-semibold text-slate-950">Billing</h2>
+          <p className="text-sm text-slate-500">Model SaaS plan limits and workspace capacity like a real production account.</p>
+        </div>
+        {billing ? (
+          <div className="space-y-5">
+            <div className="rounded-[1.5rem] border border-slate-100 bg-slate-50/80 p-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="section-kicker">Current plan</p>
+                  <h3 className="mt-2 text-2xl font-semibold text-slate-950">
+                    {billing.plan.name} <span className="text-base font-medium text-slate-500">{billing.plan.priceLabel}</span>
+                  </h3>
+                  <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-500">{billing.plan.description}</p>
+                </div>
+                <Badge tone={billing.billing.status === "active" ? "success" : billing.billing.status === "trialing" ? "info" : "warning"}>
+                  {billing.billing.status}
+                </Badge>
+              </div>
+
+              <div className="mt-5 grid gap-4 md:grid-cols-3">
+                {[
+                  {
+                    label: "Projects",
+                    used: billing.usage.projectsUsed,
+                    limit: billing.plan.limits.projects,
+                  },
+                  {
+                    label: "Members",
+                    used: billing.usage.membersUsed,
+                    limit: billing.plan.limits.members,
+                  },
+                  {
+                    label: "Storage",
+                    used: Math.round(billing.usage.storageBytesUsed / (1024 * 1024)),
+                    limit: billing.plan.limits.storageMb,
+                  },
+                ].map((item) => {
+                  const percentage = Math.min(100, Math.round((item.used / item.limit) * 100));
+
+                  return (
+                    <div key={item.label} className="rounded-2xl border border-slate-100 bg-white p-4">
+                      <div className="flex items-center justify-between text-sm text-slate-500">
+                        <span>{item.label}</span>
+                        <span>
+                          {item.used} / {item.limit}
+                        </span>
+                      </div>
+                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+                        <div className="h-full rounded-full bg-[var(--color-accent)]" style={{ width: `${percentage}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {profile.role === "admin" ? (
+              <div className="grid gap-4 lg:grid-cols-3">
+                {Object.values(BILLING_PLANS).map((plan) => (
+                  <form
+                    key={plan.id}
+                    action={(formData) => {
+                      startTransition(() => {
+                        showToast({ tone: "pending", message: `Switching to ${plan.name}...` });
+                        billingAction(formData);
+                      });
+                    }}
+                    className={`rounded-[1.5rem] border p-5 ${
+                      billing.billing.plan === plan.id ? "border-indigo-200 bg-indigo-50/70" : "border-slate-100 bg-white"
+                    }`}
+                  >
+                    <input type="hidden" name="plan" value={plan.id} />
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-lg font-semibold text-slate-950">{plan.name}</h3>
+                        <p className="mt-1 text-sm font-medium text-slate-500">{plan.priceLabel}</p>
+                      </div>
+                      {billing.billing.plan === plan.id ? <Badge tone="info">Current</Badge> : null}
+                    </div>
+                    <p className="mt-3 text-sm leading-7 text-slate-500">{plan.description}</p>
+                    <div className="mt-4 space-y-2 text-sm text-slate-600">
+                      <p>{plan.limits.projects} projects</p>
+                      <p>{plan.limits.members} members</p>
+                      <p>{plan.limits.storageMb} MB storage</p>
+                    </div>
+                    <div className="mt-5">
+                      <Button type="submit" variant={billing.billing.plan === plan.id ? "secondary" : "primary"} loading={billingPending}>
+                        {billing.billing.plan === plan.id ? "Current plan" : `Switch to ${plan.name}`}
+                      </Button>
+                    </div>
+                  </form>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">Only admins can change the workspace plan.</p>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">Billing details are not available right now.</p>
+        )}
       </section>
 
       <section className="rounded-[1.75rem] border border-white/70 bg-white p-6 shadow-[var(--shadow-card)]">

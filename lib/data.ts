@@ -1,5 +1,6 @@
 import { cache } from "react";
 
+import { getWorkspaceBillingSummary } from "@/lib/billing";
 import { SEED_DATA } from "@/lib/constants";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
@@ -10,6 +11,8 @@ import type {
   Profile,
   ProjectAsset,
   ProjectAssetWithUrl,
+  ProjectComment,
+  ProjectCommentWithAuthor,
   ProjectMilestone,
   Project,
   ProjectMember,
@@ -17,6 +20,7 @@ import type {
   ProjectTaskWithAssignee,
   ProjectWithMembers,
   WorkspaceInvite,
+  WorkspaceBillingSummary,
   WorkspaceReadiness,
 } from "@/lib/types";
 import { formatRelativeTime } from "@/lib/utils";
@@ -68,6 +72,16 @@ export const getCurrentProfile = cache(async () => {
   }
 
   return data;
+});
+
+export const getWorkspaceBilling = cache(async (): Promise<WorkspaceBillingSummary | null> => {
+  const profile = await getCurrentProfile();
+
+  if (!profile) {
+    return null;
+  }
+
+  return getWorkspaceBillingSummary(profile.id);
 });
 
 export const getNotifications = cache(async (): Promise<NotificationWithMeta[]> => {
@@ -346,6 +360,39 @@ export async function getProjectTasks(projectId: string): Promise<ProjectTaskWit
   return tasks.map((task: ProjectTask) => ({
     ...task,
     assignee: task.assignee_id ? assigneeMap.get(task.assignee_id) ?? null : null,
+  }));
+}
+
+export async function getProjectComments(projectId: string): Promise<ProjectCommentWithAuthor[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data: comments, error } = await supabase
+    .from("project_comments")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (error || !comments?.length) {
+    return [];
+  }
+
+  const authorIds = Array.from(
+    new Set(
+      comments
+        .map((comment: ProjectComment) => comment.author_id)
+        .filter((authorId): authorId is string => Boolean(authorId)),
+    ),
+  );
+  const { data: authors } =
+    authorIds.length > 0
+      ? await supabase.from("profiles").select("*").in("id", authorIds)
+      : { data: [] as Profile[] };
+  const authorMap = new Map((authors ?? []).map((profile) => [profile.id, profile]));
+
+  return comments.map((comment: ProjectComment) => ({
+    ...comment,
+    author: authorMap.get(comment.author_id) ?? null,
+    relativeTime: formatRelativeTime(comment.created_at),
   }));
 }
 

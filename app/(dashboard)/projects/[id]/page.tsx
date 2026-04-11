@@ -10,6 +10,7 @@ import {
   getProjectActivity,
   getProjectAssets,
   getProjectById,
+  getProjectComments,
   getProjectMilestones,
   getProjectTasks,
 } from "@/lib/data";
@@ -34,7 +35,7 @@ export default async function ProjectDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [project, user, profile, allProfiles, activity, assets, milestones, tasks] = await Promise.all([
+  const [project, user, profile, allProfiles, activity, assets, milestones, tasks, comments] = await Promise.all([
     getProjectById(id),
     getCurrentUser(),
     getCurrentProfile(),
@@ -43,6 +44,7 @@ export default async function ProjectDetailPage({
     getProjectAssets(id),
     getProjectMilestones(id),
     getProjectTasks(id),
+    getProjectComments(id),
   ]);
 
   if (!project) {
@@ -61,11 +63,13 @@ export default async function ProjectDetailPage({
       <ProjectDetailEditor
         project={project}
         canManage={canManage}
+        currentUserId={user?.id ?? null}
         availableMembers={availableMembers}
         activity={activity}
         assets={assets}
         milestones={milestones}
         tasks={tasks}
+        comments={comments}
       />
     </div>
   );
