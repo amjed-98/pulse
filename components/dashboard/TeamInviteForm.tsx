@@ -6,7 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
 import { inviteMember } from "@/lib/actions/team";
-import type { ActionState } from "@/lib/types";
+import type { ActionState, PlanLimitPayload } from "@/lib/types";
+import { PlanLimitAlert } from "@/components/dashboard/PlanLimitAlert";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
@@ -20,6 +21,18 @@ const schema = z.object({
 type Values = z.infer<typeof schema>;
 
 const initialState: ActionState = {};
+
+function getPlanLimitPayload(payload: ActionState["payload"]): PlanLimitPayload | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+
+  if (payload.kind !== "plan_limit") {
+    return null;
+  }
+
+  return payload as PlanLimitPayload;
+}
 
 export function TeamInviteForm({ canInvite }: { canInvite: boolean }) {
   const [state, submitAction, isPending] = useActionState(inviteMember, initialState);
@@ -68,12 +81,15 @@ export function TeamInviteForm({ canInvite }: { canInvite: boolean }) {
     }
   }, [showToast, state.message, state.success]);
 
+  const planLimitPayload = getPlanLimitPayload(state.payload);
+
   return (
     <form className="rounded-[1.75rem] border border-white/70 bg-white p-5 shadow-[var(--shadow-card)]" onSubmit={onSubmit}>
       <div className="mb-4">
         <h2 className="text-lg font-semibold text-slate-950">Invite a member</h2>
         <p className="text-sm text-slate-500">Send a workspace invite with a predefined role and let the acceptance flow assign access cleanly.</p>
       </div>
+      {planLimitPayload ? <div className="mb-4"><PlanLimitAlert payload={planLimitPayload} /></div> : null}
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_auto]">
         <Input
           label="Email"

@@ -20,6 +20,7 @@ import {
 import type {
   ActionState,
   ActivityItem,
+  PlanLimitPayload,
   Profile,
   ProjectAssetWithUrl,
   ProjectCommentWithAuthor,
@@ -27,12 +28,25 @@ import type {
   ProjectTaskWithAssignee,
   ProjectWithMembers,
 } from "@/lib/types";
+import { PlanLimitAlert } from "@/components/dashboard/PlanLimitAlert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/ToastProvider";
 
 const initialState: ActionState = {};
+
+function getPlanLimitPayload(payload: ActionState["payload"]): PlanLimitPayload | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+
+  if (payload.kind !== "plan_limit") {
+    return null;
+  }
+
+  return payload as PlanLimitPayload;
+}
 
 interface ProjectDetailEditorProps {
   project: ProjectWithMembers;
@@ -109,6 +123,7 @@ export function ProjectDetailEditor({
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
   const coverAsset = assets.find((asset) => asset.asset_type === "cover") ?? null;
   const attachmentAssets = assets.filter((asset) => asset.asset_type === "attachment");
+  const assetPlanLimitPayload = getPlanLimitPayload(assetState.payload);
 
   useEffect(() => {
     setSelectedMemberId(availableMembers[0]?.id ?? "");
@@ -762,6 +777,7 @@ export function ProjectDetailEditor({
             <div className="space-y-4">
               {canManage ? (
                 <>
+                  {assetPlanLimitPayload ? <PlanLimitAlert payload={assetPlanLimitPayload} /> : null}
                   <form
                     action={(formData) => {
                       formData.set("assetType", "cover");

@@ -6,7 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
 import { createProject } from "@/lib/actions/projects";
-import type { ActionState } from "@/lib/types";
+import type { ActionState, PlanLimitPayload } from "@/lib/types";
+import { PlanLimitAlert } from "@/components/dashboard/PlanLimitAlert";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
@@ -23,6 +24,18 @@ const schema = z.object({
 type Values = z.infer<typeof schema>;
 
 const initialState: ActionState = {};
+
+function getPlanLimitPayload(payload: ActionState["payload"]): PlanLimitPayload | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+
+  if (payload.kind !== "plan_limit") {
+    return null;
+  }
+
+  return payload as PlanLimitPayload;
+}
 
 export function CreateProjectModal({ triggerLabel = "New project" }: { triggerLabel?: string }) {
   const [open, setOpen] = useState(false);
@@ -76,6 +89,8 @@ export function CreateProjectModal({ triggerLabel = "New project" }: { triggerLa
     });
   });
 
+  const planLimitPayload = getPlanLimitPayload(state.payload);
+
   return (
     <>
       <Button onClick={() => setOpen(true)}>{triggerLabel}</Button>
@@ -86,6 +101,7 @@ export function CreateProjectModal({ triggerLabel = "New project" }: { triggerLa
         description="Launch a new initiative and keep the team aligned from day one."
       >
         <form className="space-y-4" onSubmit={onSubmit}>
+          {planLimitPayload ? <PlanLimitAlert payload={planLimitPayload} /> : null}
           <Input label="Project name" placeholder="Northstar Growth" error={errors.name?.message ?? state.fieldErrors?.name?.[0]} {...register("name")} />
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">Description</span>

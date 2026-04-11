@@ -10,6 +10,7 @@ Pulse is a portfolio SaaS dashboard built with Next.js 15, React 19, Tailwind CS
 - Project management with server actions for create, update, and delete
 - Team management with invites and role-aware UI
 - Settings flows for profile updates, password changes, and account deletion
+- Workspace billing with plan limits, Stripe Checkout, and Billing Portal integration
 - Tailwind CSS v4 design system with responsive dashboard layout
 - Audit logging and activity timelines backed by Supabase
 - Role-aware project collaboration and workspace invite lifecycle
@@ -52,6 +53,10 @@ cp .env.example .env.local
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_PRICE_GROWTH_MONTHLY`
+- `STRIPE_PRICE_SCALE_MONTHLY`
 
 4. Run the app:
 
@@ -68,6 +73,7 @@ Run the SQL in `supabase/migrations/001_initial.sql` against your Supabase proje
 Important notes:
 
 - `SUPABASE_SERVICE_ROLE_KEY` is required for team invites and account deletion.
+- Stripe billing is optional locally, but production checkout and portal flows require the Stripe env vars above.
 - The app uses RLS as the primary data access control layer.
 - Auth session refresh is handled in `middleware.ts` via `@supabase/ssr`.
 
@@ -117,6 +123,8 @@ Pulse validates required public environment variables at boot through a shared e
 - account deletion
 - deep database health probing
 
+Stripe env vars are also optional, but billing falls back to preview-mode plan switching when they are absent.
+
 ## Project Structure
 
 ```text
@@ -142,6 +150,10 @@ middleware.ts       session refresh and route protection
   - pending invites with assigned roles
   - accepted invite role propagation on signup
   - admin role changes and revocation flows
+- Workspace billing supports:
+  - preview-mode plan switching without Stripe
+  - Stripe-hosted subscription upgrades
+  - Billing Portal handoff and webhook-based subscription sync
 
 ## Production Work Added
 
@@ -196,3 +208,25 @@ It reports:
 - env configuration status
 - database probe status
 - degraded mode when the service role key is intentionally absent
+
+## Stripe Billing Setup
+
+If you want live billing instead of local preview billing:
+
+1. Create recurring Stripe prices for the `growth` and `scale` plans.
+2. Add their price IDs to:
+   - `STRIPE_PRICE_GROWTH_MONTHLY`
+   - `STRIPE_PRICE_SCALE_MONTHLY`
+3. Set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`.
+4. Point your Stripe webhook endpoint to:
+
+```text
+https://your-domain.com/api/stripe/webhooks
+```
+
+Recommended webhook events:
+
+- `checkout.session.completed`
+- `customer.subscription.created`
+- `customer.subscription.updated`
+- `customer.subscription.deleted`

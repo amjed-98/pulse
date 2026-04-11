@@ -6,13 +6,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
 import { changePassword, deleteAccount, updateProfile } from "@/lib/actions/auth";
-import { updateWorkspacePlan } from "@/lib/actions/billing";
+import { openStripeBillingPortal, startStripeCheckout, updateWorkspacePlan } from "@/lib/actions/billing";
 import { BILLING_PLANS } from "@/lib/constants";
 import type { ActionState, Profile, WorkspaceBillingSummary } from "@/lib/types";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { SubmitButton } from "@/components/ui/SubmitButton";
 import { useToast } from "@/components/ui/ToastProvider";
 
 const profileSchema = z.object({
@@ -31,12 +32,90 @@ const passwordSchema = z
 
 const initialState: ActionState = {};
 
+function getUsagePercentage(used: number, limit: number) {
+  if (limit <= 0) {
+    return 0;
+  }
+
+  return Math.min(100, Math.round((used / limit) * 100));
+}
+
+function getBillingStatusCopy(billing: WorkspaceBillingSummary) {
+  if (billing.billing.status === "past_due") {
+    return {
+      tone: "warning" as const,
+      title: "Billing needs attention",
+      message: "This workspace is marked past due. Use the billing portal to recover payment and avoid disruption.",
+    };
+  }
+
+  if (billing.billing.status === "trialing") {
+    const trialEndsAt = billing.billing.trial_ends_at ? new Date(billing.billing.trial_ends_at) : null;
+    const daysRemaining = trialEndsAt ? Math.max(0, Math.ceil((trialEndsAt.getTime() - Date.now()) / 86400000)) : null;
+
+    return {
+      tone: "info" as const,
+      title: "Trial workspace",
+      message:
+        daysRemaining === null
+          ? "This workspace is currently in trial mode."
+          : `Trial access ends in ${daysRemaining} day${daysRemaining === 1 ? "" : "s"}.`,
+    };
+  }
+
+  return {
+    tone: "success" as const,
+    title: "Billing is healthy",
+    message: "This workspace is on an active plan and can continue operating within its current limits.",
+  };
+}
+
+function getBillingIntentCopy(intent: string | null) {
+  switch (intent) {
+    case "success":
+      return {
+        tone: "success" as const,
+        title: "Checkout completed",
+        message: "Stripe accepted the checkout. Pulse is syncing the subscription state now.",
+      };
+    case "canceled":
+      return {
+        tone: "warning" as const,
+        title: "Checkout canceled",
+        message: "No billing changes were made. You can restart checkout whenever you are ready.",
+      };
+    case "portal-return":
+      return {
+        tone: "info" as const,
+        title: "Returned from billing portal",
+        message: "Subscription changes from Stripe will appear here as soon as the webhook sync completes.",
+      };
+    case "stripe-unavailable":
+    case "portal-unavailable":
+      return {
+        tone: "warning" as const,
+        title: "Stripe is not ready",
+        message: "Add the Stripe environment variables to enable hosted checkout and the billing portal.",
+      };
+    case "error":
+      return {
+        tone: "danger" as const,
+        title: "Billing action failed",
+        message: "Pulse could not start the billing flow. Check server logs and Stripe configuration.",
+      };
+    default:
+      return null;
+  }
+}
+
 export function SettingsForms({
   profile,
   billing,
+  billingIntent,
 }: {
   profile: Profile;
   billing: WorkspaceBillingSummary | null;
+  billingIntent: string | null;
 }) {
   const [profileState, profileAction, profilePending] = useActionState(updateProfile, initialState);
   const [passwordState, passwordAction, passwordPending] = useActionState(changePassword, initialState);
@@ -48,6 +127,8 @@ export function SettingsForms({
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(profile.avatar_url);
   const [removeAvatar, setRemoveAvatar] = useState(false);
+  const billingStatus = billing ? getBillingStatusCopy(billing) : null;
+  const billingIntentCopy = getBillingIntentCopy(billingIntent);
 
   const {
     register: registerProfile,
@@ -226,6 +307,20 @@ export function SettingsForms({
         </div>
         {billing ? (
           <div className="space-y-5">
+            {billingIntentCopy ? (
+              <div className="rounded-[1.5rem] border border-slate-100 bg-slate-50/80 p-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Badge tone={billingIntentCopy.tone}>{billingIntentCopy.title}</Badge>
+                  <p className="text-sm text-slate-600">{billingIntentCopy.message}</p>
+                </div>
+              </div>
+            ) : null}
+            <div className="rounded-[1.5rem] border border-slate-100 bg-slate-50/80 p-4">
+              <div className="flex flex-wrap items-center gap-3">
+                {billingStatus ? <Badge tone={billingStatus.tone}>{billingStatus.title}</Badge> : null}
+                {billingStatus ? <p className="text-sm text-slate-600">{billingStatus.message}</p> : null}
+              </div>
+            </div>
             <div className="rounded-[1.5rem] border border-slate-100 bg-slate-50/80 p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
@@ -238,6 +333,23 @@ export function SettingsForms({
                 <Badge tone={billing.billing.status === "active" ? "success" : billing.billing.status === "trialing" ? "info" : "warning"}>
                   {billing.billing.status}
                 </Badge>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-3 text-sm text-slate-500">
+                <span>Stripe {billing.stripeConfigured ? "configured" : "not configured"}</span>
+                <span>•</span>
+                <span>{billing.billing.stripe_subscription_id ? "Subscription connected" : "No live subscription yet"}</span>
+                {billing.billing.current_period_end ? (
+                  <>
+                    <span>•</span>
+                    <span>Renews {new Date(billing.billing.current_period_end).toLocaleDateString()}</span>
+                  </>
+                ) : null}
+                {billing.billing.cancel_at_period_end ? (
+                  <>
+                    <span>•</span>
+                    <span>Cancels at period end</span>
+                  </>
+                ) : null}
               </div>
 
               <div className="mt-5 grid gap-4 md:grid-cols-3">
@@ -258,7 +370,7 @@ export function SettingsForms({
                     limit: billing.plan.limits.storageMb,
                   },
                 ].map((item) => {
-                  const percentage = Math.min(100, Math.round((item.used / item.limit) * 100));
+                  const percentage = getUsagePercentage(item.used, item.limit);
 
                   return (
                     <div key={item.label} className="rounded-2xl border border-slate-100 bg-white p-4">
@@ -269,8 +381,18 @@ export function SettingsForms({
                         </span>
                       </div>
                       <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
-                        <div className="h-full rounded-full bg-[var(--color-accent)]" style={{ width: `${percentage}%` }} />
+                        <div
+                          className={
+                            percentage >= 90
+                              ? "h-full rounded-full bg-red-500"
+                              : percentage >= 75
+                                ? "h-full rounded-full bg-amber-500"
+                                : "h-full rounded-full bg-[var(--color-accent)]"
+                          }
+                          style={{ width: `${percentage}%` }}
+                        />
                       </div>
+                      <p className="mt-2 text-xs text-slate-500">{percentage}% of current plan capacity</p>
                     </div>
                   );
                 })}
@@ -278,42 +400,100 @@ export function SettingsForms({
             </div>
 
             {profile.role === "admin" ? (
-              <div className="grid gap-4 lg:grid-cols-3">
-                {Object.values(BILLING_PLANS).map((plan) => (
-                  <form
-                    key={plan.id}
-                    action={(formData) => {
-                      startTransition(() => {
-                        showToast({ tone: "pending", message: `Switching to ${plan.name}...` });
-                        billingAction(formData);
-                      });
-                    }}
-                    className={`rounded-[1.5rem] border p-5 ${
-                      billing.billing.plan === plan.id ? "border-indigo-200 bg-indigo-50/70" : "border-slate-100 bg-white"
-                    }`}
-                  >
-                    <input type="hidden" name="plan" value={plan.id} />
-                    <div className="flex items-start justify-between gap-3">
+              <>
+                {billing.stripeConfigured && billing.billing.stripe_customer_id ? (
+                  <form action={openStripeBillingPortal} className="rounded-[1.5rem] border border-slate-100 bg-slate-50/80 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
                       <div>
-                        <h3 className="text-lg font-semibold text-slate-950">{plan.name}</h3>
-                        <p className="mt-1 text-sm font-medium text-slate-500">{plan.priceLabel}</p>
+                        <p className="text-sm font-medium text-slate-900">Manage subscription in Stripe</p>
+                        <p className="mt-1 text-sm text-slate-500">Use the billing portal for payment methods, cancellations, and invoice history.</p>
                       </div>
-                      {billing.billing.plan === plan.id ? <Badge tone="info">Current</Badge> : null}
-                    </div>
-                    <p className="mt-3 text-sm leading-7 text-slate-500">{plan.description}</p>
-                    <div className="mt-4 space-y-2 text-sm text-slate-600">
-                      <p>{plan.limits.projects} projects</p>
-                      <p>{plan.limits.members} members</p>
-                      <p>{plan.limits.storageMb} MB storage</p>
-                    </div>
-                    <div className="mt-5">
-                      <Button type="submit" variant={billing.billing.plan === plan.id ? "secondary" : "primary"} loading={billingPending}>
-                        {billing.billing.plan === plan.id ? "Current plan" : `Switch to ${plan.name}`}
-                      </Button>
+                      <SubmitButton type="submit" variant="secondary">
+                        Open billing portal
+                      </SubmitButton>
                     </div>
                   </form>
-                ))}
-              </div>
+                ) : null}
+
+                <div className="grid gap-4 lg:grid-cols-3">
+                  {Object.values(BILLING_PLANS).map((plan) => {
+                    const isCurrentPlan = billing.billing.plan === plan.id;
+                    const isPaidPlan = plan.id !== "starter";
+
+                    return (
+                      <div
+                        key={plan.id}
+                        className={`rounded-[1.5rem] border p-5 ${
+                          isCurrentPlan ? "border-indigo-200 bg-indigo-50/70" : "border-slate-100 bg-white"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <h3 className="text-lg font-semibold text-slate-950">{plan.name}</h3>
+                            <p className="mt-1 text-sm font-medium text-slate-500">{plan.priceLabel}</p>
+                          </div>
+                          {isCurrentPlan ? <Badge tone="info">Current</Badge> : null}
+                        </div>
+                        <p className="mt-3 text-sm leading-7 text-slate-500">{plan.description}</p>
+                        <div className="mt-4 space-y-2 text-sm text-slate-600">
+                          <p>{plan.limits.projects} projects</p>
+                          <p>{plan.limits.members} members</p>
+                          <p>{plan.limits.storageMb} MB storage</p>
+                        </div>
+                        <div className="mt-5">
+                          {billing.stripeConfigured ? (
+                            isPaidPlan ? (
+                              isCurrentPlan && billing.billing.stripe_subscription_id ? (
+                                <form action={openStripeBillingPortal}>
+                                  <SubmitButton type="submit" variant="secondary">
+                                    Manage in Stripe
+                                  </SubmitButton>
+                                </form>
+                              ) : (
+                                <form action={startStripeCheckout.bind(null, plan.id as "growth" | "scale")}>
+                                  <SubmitButton type="submit" variant="primary">
+                                    Upgrade with Stripe
+                                  </SubmitButton>
+                                </form>
+                              )
+                            ) : isCurrentPlan ? (
+                              <Button type="button" variant="secondary" disabled>
+                                Current plan
+                              </Button>
+                            ) : (
+                              <form action={openStripeBillingPortal}>
+                                <SubmitButton type="submit" variant="secondary">
+                                  Manage downgrade
+                                </SubmitButton>
+                              </form>
+                            )
+                          ) : (
+                            <form
+                              action={(formData) => {
+                                startTransition(() => {
+                                  showToast({ tone: "pending", message: `Switching to ${plan.name}...` });
+                                  billingAction(formData);
+                                });
+                              }}
+                            >
+                              <input type="hidden" name="plan" value={plan.id} />
+                              <Button type="submit" variant={isCurrentPlan ? "secondary" : "primary"} loading={billingPending}>
+                                {isCurrentPlan ? "Current plan" : `Switch to ${plan.name}`}
+                              </Button>
+                            </form>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {!billing.stripeConfigured ? (
+                  <p className="text-sm text-slate-500">
+                    Stripe is not configured in this environment, so plan changes use local preview billing state instead of hosted checkout.
+                  </p>
+                ) : null}
+              </>
             ) : (
               <p className="text-sm text-slate-500">Only admins can change the workspace plan.</p>
             )}

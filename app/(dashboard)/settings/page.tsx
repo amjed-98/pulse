@@ -11,7 +11,12 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ billing?: string }>;
+}) {
+  const { billing: billingIntent } = await searchParams;
   const [profile, billing] = await Promise.all([getCurrentProfile(), getWorkspaceBilling()]);
 
   if (!profile) {
@@ -25,7 +30,7 @@ export default async function SettingsPage() {
         <h1 className="mt-2 text-3xl font-semibold text-slate-950">Account controls</h1>
         <p className="mt-2 text-sm text-slate-500">Update workspace identity, secure credentials, and manage account lifecycle.</p>
       </section>
-      <SettingsForms profile={profile} billing={billing} />
+      <SettingsForms profile={profile} billing={billing} billingIntent={billingIntent ?? null} />
     </div>
   );
 }

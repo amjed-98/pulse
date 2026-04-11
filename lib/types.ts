@@ -7,6 +7,8 @@ export type ProjectTaskPriority = "low" | "medium" | "high";
 export type ProjectMilestoneStatus = "planned" | "in_progress" | "completed";
 export type NotificationType = "info" | "project" | "team" | "system";
 export type WorkspacePlan = "starter" | "growth" | "scale";
+export type WorkspaceBillingStatus = "active" | "past_due" | "trialing" | "canceled";
+export type PlanLimitResource = "projects" | "members" | "storage";
 
 export interface Database {
   public: {
@@ -111,19 +113,29 @@ export interface Database {
       workspace_billing: {
         Row: {
           created_at: string;
+          cancel_at_period_end: boolean;
+          current_period_end: string | null;
           id: string;
           owner_id: string;
           plan: WorkspacePlan;
-          status: "active" | "past_due" | "trialing";
+          stripe_customer_id: string | null;
+          stripe_price_id: string | null;
+          stripe_subscription_id: string | null;
+          status: WorkspaceBillingStatus;
           trial_ends_at: string | null;
           updated_at: string;
         };
         Insert: {
           created_at?: string;
+          cancel_at_period_end?: boolean;
+          current_period_end?: string | null;
           id?: string;
           owner_id: string;
           plan?: WorkspacePlan;
-          status?: "active" | "past_due" | "trialing";
+          stripe_customer_id?: string | null;
+          stripe_price_id?: string | null;
+          stripe_subscription_id?: string | null;
+          status?: WorkspaceBillingStatus;
           trial_ends_at?: string | null;
           updated_at?: string;
         };
@@ -500,10 +512,20 @@ export interface WorkspaceUsage {
   storageBytesUsed: number;
 }
 
+export interface PlanLimitPayload {
+  kind: "plan_limit";
+  resource: PlanLimitResource;
+  currentPlan: WorkspacePlan;
+  recommendedPlan: WorkspacePlan | null;
+  used: number;
+  limit: number;
+}
+
 export interface WorkspaceBillingSummary {
   billing: WorkspaceBilling;
   plan: BillingPlanDefinition;
   usage: WorkspaceUsage;
+  stripeConfigured: boolean;
 }
 
 export interface CurrentWorkspaceAccess {
@@ -549,7 +571,7 @@ export interface ActionState {
   message?: string;
   errorId?: string;
   fieldErrors?: Record<string, string[] | undefined>;
-  payload?: Json;
+  payload?: Json | PlanLimitPayload;
 }
 
 export interface AuthFormState extends ActionState {

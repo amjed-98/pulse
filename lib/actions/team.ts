@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { recordAnalyticsEvent } from "@/lib/analytics";
 import { createAuditLog } from "@/lib/audit";
-import { getWorkspaceBillingSummary } from "@/lib/billing";
+import { buildPlanLimitPayload, getWorkspaceBillingSummary } from "@/lib/billing";
 import { toActionErrorState } from "@/lib/logger";
 import { createNotification, createNotifications } from "@/lib/notifications";
 import { requireAdminAccess } from "@/lib/permissions";
@@ -56,6 +56,12 @@ export async function inviteMember(_: ActionState, formData: FormData): Promise<
       return {
         success: false,
         message: `The ${billing.plan.name} plan supports up to ${billing.plan.limits.members} members. Upgrade to invite more teammates.`,
+        payload: buildPlanLimitPayload({
+          resource: "members",
+          currentPlan: billing.billing.plan,
+          used: billing.usage.membersUsed,
+          limit: billing.plan.limits.members,
+        }),
       };
     }
 

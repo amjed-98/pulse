@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { recordAnalyticsEvent } from "@/lib/analytics";
 import { createAuditLog } from "@/lib/audit";
-import { getStorageLimitBytes, getWorkspaceBillingSummary } from "@/lib/billing";
+import { buildPlanLimitPayload, getStorageLimitBytes, getWorkspaceBillingSummary } from "@/lib/billing";
 import { toActionErrorState } from "@/lib/logger";
 import { createNotification, createNotifications } from "@/lib/notifications";
 import { requireCurrentWorkspaceAccess } from "@/lib/permissions";
@@ -141,6 +141,12 @@ export async function createProject(_: ActionState, formData: FormData): Promise
       return {
         success: false,
         message: `The ${billing.plan.name} plan supports up to ${billing.plan.limits.projects} projects. Upgrade to add more.`,
+        payload: buildPlanLimitPayload({
+          resource: "projects",
+          currentPlan: billing.billing.plan,
+          used: billing.usage.projectsUsed,
+          limit: billing.plan.limits.projects,
+        }),
       };
     }
 
@@ -719,6 +725,12 @@ export async function uploadProjectAsset(
       return {
         success: false,
         message: `${billing.plan.name} includes ${billing.plan.limits.storageMb} MB of file storage. Upgrade to upload more assets.`,
+        payload: buildPlanLimitPayload({
+          resource: "storage",
+          currentPlan: billing.billing.plan,
+          used: Math.round((billing.usage.storageBytesUsed + assetFile.size) / (1024 * 1024)),
+          limit: billing.plan.limits.storageMb,
+        }),
       };
     }
 
