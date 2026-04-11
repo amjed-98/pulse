@@ -1,6 +1,8 @@
+import { headers } from "next/headers";
 import type { Metadata } from "next";
 
 import { SignupForm } from "@/components/auth/SignupForm";
+import { resolveRequestOrigin } from "@/lib/site-url";
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
@@ -14,6 +16,8 @@ export default async function SignupPage({
 }: {
   searchParams: Promise<{ status?: string; email?: string }>;
 }) {
+  const headersList = await headers();
+  const siteUrl = resolveRequestOrigin(headersList);
   const { status, email } = await searchParams;
   const showConfirmation = status === "check-email";
 
@@ -22,7 +26,7 @@ export default async function SignupPage({
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(79,70,229,0.18),transparent_25%),radial-gradient(circle_at_bottom_right,rgba(14,165,233,0.16),transparent_24%),linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)]" />
       <div className="mx-auto grid w-full max-w-6xl items-center gap-8 lg:grid-cols-[0.85fr_0.95fr]">
         <div className="order-2 w-full max-w-md justify-self-center lg:order-1">
-          <SignupForm defaultEmail={email} showConfirmation={showConfirmation} />
+          <SignupForm defaultEmail={email} showConfirmation={showConfirmation} siteUrl={siteUrl} />
         </div>
         <section className="order-1 hidden lg:block lg:order-2">
           <div className="space-y-6">

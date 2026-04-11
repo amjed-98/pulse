@@ -1,6 +1,6 @@
 import { cache } from "react";
 
-import { getWorkspaceBillingSummary } from "@/lib/billing";
+import { getWorkspaceBillingInvoices, getWorkspaceBillingSummary } from "@/lib/billing";
 import { SEED_DATA } from "@/lib/constants";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
@@ -21,6 +21,7 @@ import type {
   ProjectWithMembers,
   WorkspaceInvite,
   WorkspaceBillingSummary,
+  WorkspaceInvoiceSummary,
   WorkspaceReadiness,
 } from "@/lib/types";
 import { formatRelativeTime } from "@/lib/utils";
@@ -82,6 +83,16 @@ export const getWorkspaceBilling = cache(async (): Promise<WorkspaceBillingSumma
   }
 
   return getWorkspaceBillingSummary(profile.id);
+});
+
+export const getWorkspaceInvoiceHistory = cache(async (): Promise<WorkspaceInvoiceSummary[]> => {
+  const profile = await getCurrentProfile();
+
+  if (!profile) {
+    return [];
+  }
+
+  return getWorkspaceBillingInvoices(profile.id);
 });
 
 export const getNotifications = cache(async (): Promise<NotificationWithMeta[]> => {

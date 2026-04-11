@@ -6,7 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
 import { inviteMember } from "@/lib/actions/team";
-import type { ActionState, PlanLimitPayload } from "@/lib/types";
+import type { ActionState, BillingGatePayload, PlanLimitPayload } from "@/lib/types";
+import { BillingGateAlert } from "@/components/dashboard/BillingGateAlert";
 import { PlanLimitAlert } from "@/components/dashboard/PlanLimitAlert";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -32,6 +33,18 @@ function getPlanLimitPayload(payload: ActionState["payload"]): PlanLimitPayload 
   }
 
   return payload as PlanLimitPayload;
+}
+
+function getBillingGatePayload(payload: ActionState["payload"]): BillingGatePayload | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+
+  if (payload.kind !== "billing_gate") {
+    return null;
+  }
+
+  return payload as BillingGatePayload;
 }
 
 export function TeamInviteForm({ canInvite }: { canInvite: boolean }) {
@@ -82,6 +95,7 @@ export function TeamInviteForm({ canInvite }: { canInvite: boolean }) {
   }, [showToast, state.message, state.success]);
 
   const planLimitPayload = getPlanLimitPayload(state.payload);
+  const billingGatePayload = getBillingGatePayload(state.payload);
 
   return (
     <form className="rounded-[1.75rem] border border-white/70 bg-white p-5 shadow-[var(--shadow-card)]" onSubmit={onSubmit}>
@@ -89,6 +103,7 @@ export function TeamInviteForm({ canInvite }: { canInvite: boolean }) {
         <h2 className="text-lg font-semibold text-slate-950">Invite a member</h2>
         <p className="text-sm text-slate-500">Send a workspace invite with a predefined role and let the acceptance flow assign access cleanly.</p>
       </div>
+      {billingGatePayload ? <div className="mb-4"><BillingGateAlert payload={billingGatePayload} /></div> : null}
       {planLimitPayload ? <div className="mb-4"><PlanLimitAlert payload={planLimitPayload} /></div> : null}
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_auto]">
         <Input

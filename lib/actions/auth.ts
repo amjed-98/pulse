@@ -12,6 +12,7 @@ import { toActionErrorState, toAuthErrorState } from "@/lib/logger";
 import { createNotification } from "@/lib/notifications";
 import { requireCurrentWorkspaceAccess } from "@/lib/permissions";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { resolveRequestOrigin, sanitizeSiteUrl } from "@/lib/site-url";
 import { AVATAR_BUCKET, AVATAR_MIME_TYPES, MAX_AVATAR_FILE_SIZE, buildAvatarObjectPath, extractStorageObjectPath } from "@/lib/storage";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import type { ActionState, AuthFormState } from "@/lib/types";
@@ -55,20 +56,16 @@ function withFieldErrors(error: z.ZodError): ActionState {
   };
 }
 
-function getOrigin(headersList: Headers) {
-  const origin = headersList.get("origin");
-  const forwardedHost = headersList.get("x-forwarded-host");
-  const forwardedProto = headersList.get("x-forwarded-proto") ?? "https";
-
-  if (origin) {
-    return origin;
+function sanitizeNextPath(next: string | null) {
+  if (!next) {
+    return "/dashboard";
   }
 
-  if (forwardedHost) {
-    return `${forwardedProto}://${forwardedHost}`;
+  if (!next.startsWith("/") || next.startsWith("//")) {
+    return "/dashboard";
   }
 
-  return process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  return next;
 }
 
 export async function signIn(_: AuthFormState, formData: FormData): Promise<AuthFormState> {
@@ -81,6 +78,8 @@ export async function signIn(_: AuthFormState, formData: FormData): Promise<Auth
     if (!parsed.success) {
       return withFieldErrors(parsed.error);
     }
+
+    const next = sanitizeNextPath(typeof formData.get("next") === "string" ? String(formData.get("next")) : null);
 
     const signInRateLimit = await enforceRateLimit({
       scope: "auth.sign-in",
@@ -121,7 +120,7 @@ export async function signIn(_: AuthFormState, formData: FormData): Promise<Auth
     }
 
     revalidatePath("/", "layout");
-    redirect("/dashboard");
+    redirect(next);
   } catch (error) {
     unstable_rethrow(error);
 
@@ -132,6 +131,40 @@ export async function signIn(_: AuthFormState, formData: FormData): Promise<Auth
       error,
       email: typeof formData.get("email") === "string" ? String(formData.get("email")) : undefined,
     });
+  }
+}
+
+export async function signInWithGoogle(formData: FormData) {
+  try {
+    const headersList = await headers();
+    const origin = sanitizeSiteUrl(formData.get("siteUrl")) ?? resolveRequestOrigin(headersList);
+    const next = sanitizeNextPath(typeof formData.get("next") === "string" ? String(formData.get("next")) : null);
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
+      },
+    });
+
+    if (error || !data.url) {
+      const destination = new URL("/login", origin);
+      destination.searchParams.set("error", error?.message ?? "Could not start Google sign-in right now.");
+      if (next !== "/dashboard") {
+        destination.searchParams.set("next", next);
+      }
+      redirect(destination.toString());
+    }
+
+    redirect(data.url);
+  } catch (error) {
+    unstable_rethrow(error);
+
+    const headersList = await headers();
+    const origin = resolveRequestOrigin(headersList);
+    const destination = new URL("/login", origin);
+    destination.searchParams.set("error", "Could not start Google sign-in right now.");
+    redirect(destination.toString());
   }
 }
 
@@ -165,7 +198,7 @@ export async function signUp(_: AuthFormState, formData: FormData): Promise<Auth
 
     const supabase = await createSupabaseServerClient();
     const headersList = await headers();
-    const origin = getOrigin(headersList);
+    const origin = sanitizeSiteUrl(formData.get("siteUrl")) ?? resolveRequestOrigin(headersList);
     const { error } = await supabase.auth.signUp({
       email: parsed.data.email,
       password: parsed.data.password,

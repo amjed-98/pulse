@@ -57,8 +57,16 @@ export default async function ProjectDetailPage({
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
         <p className="text-sm font-medium uppercase tracking-[0.25em] text-slate-400">Project detail</p>
+        </div>
+        <a
+          href={`/api/export/projects/${project.id}`}
+          className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
+        >
+          Export report
+        </a>
       </div>
       <ProjectDetailEditor
         project={project}

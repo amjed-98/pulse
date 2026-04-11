@@ -8,7 +8,8 @@ import { z } from "zod";
 import { changePassword, deleteAccount, updateProfile } from "@/lib/actions/auth";
 import { openStripeBillingPortal, startStripeCheckout, updateWorkspacePlan } from "@/lib/actions/billing";
 import { BILLING_PLANS } from "@/lib/constants";
-import type { ActionState, Profile, WorkspaceBillingSummary } from "@/lib/types";
+import type { ActionState, Profile, WorkspaceBillingSummary, WorkspaceInvoiceSummary } from "@/lib/types";
+import { formatDate, formatMoney } from "@/lib/utils";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -112,10 +113,12 @@ export function SettingsForms({
   profile,
   billing,
   billingIntent,
+  invoices,
 }: {
   profile: Profile;
   billing: WorkspaceBillingSummary | null;
   billingIntent: string | null;
+  invoices: WorkspaceInvoiceSummary[];
 }) {
   const [profileState, profileAction, profilePending] = useActionState(updateProfile, initialState);
   const [passwordState, passwordAction, passwordPending] = useActionState(changePassword, initialState);
@@ -493,6 +496,74 @@ export function SettingsForms({
                     Stripe is not configured in this environment, so plan changes use local preview billing state instead of hosted checkout.
                   </p>
                 ) : null}
+
+                <div className="rounded-[1.5rem] border border-slate-100 bg-slate-50/80 p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-slate-950">Billing history</h3>
+                      <p className="mt-1 text-sm text-slate-500">Recent invoices and payment activity for this workspace subscription.</p>
+                    </div>
+                    <Badge tone="neutral">{invoices.length}</Badge>
+                  </div>
+
+                  {billing.stripeConfigured ? (
+                    invoices.length > 0 ? (
+                      <div className="mt-5 space-y-3">
+                        {invoices.map((invoice) => (
+                          <div key={invoice.id} className="rounded-2xl border border-slate-100 bg-white p-4">
+                            <div className="flex flex-wrap items-start justify-between gap-4">
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="font-medium text-slate-900">{invoice.number ?? invoice.id}</p>
+                                  <Badge
+                                    tone={
+                                      invoice.status === "paid"
+                                        ? "success"
+                                        : invoice.status === "open"
+                                          ? "warning"
+                                          : invoice.status === "draft"
+                                            ? "info"
+                                            : "neutral"
+                                    }
+                                  >
+                                    {invoice.status ?? "unknown"}
+                                  </Badge>
+                                </div>
+                                <p className="mt-1 text-sm text-slate-500">
+                                  {formatDate(invoice.createdAt)} • {formatMoney(invoice.amountPaid / 100, invoice.currency)}
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {invoice.hostedInvoiceUrl ? (
+                                  <a href={invoice.hostedInvoiceUrl} target="_blank" rel="noreferrer">
+                                    <Button type="button" variant="secondary" size="sm">
+                                      View invoice
+                                    </Button>
+                                  </a>
+                                ) : null}
+                                {invoice.invoicePdfUrl ? (
+                                  <a href={invoice.invoicePdfUrl} target="_blank" rel="noreferrer">
+                                    <Button type="button" variant="ghost" size="sm">
+                                      PDF
+                                    </Button>
+                                  </a>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-5 rounded-2xl border border-dashed border-slate-200 bg-white/80 p-5 text-sm leading-7 text-slate-500">
+                        No invoices yet. They will appear here after the first successful Stripe billing cycle.
+                      </div>
+                    )
+                  ) : (
+                    <div className="mt-5 rounded-2xl border border-dashed border-slate-200 bg-white/80 p-5 text-sm leading-7 text-slate-500">
+                      Stripe is not configured in this environment, so invoice history is unavailable.
+                    </div>
+                  )}
+                </div>
               </>
             ) : (
               <p className="text-sm text-slate-500">Only admins can change the workspace plan.</p>

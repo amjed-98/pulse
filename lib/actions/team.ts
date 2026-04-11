@@ -5,7 +5,13 @@ import { z } from "zod";
 
 import { recordAnalyticsEvent } from "@/lib/analytics";
 import { createAuditLog } from "@/lib/audit";
-import { buildPlanLimitPayload, getWorkspaceBillingSummary } from "@/lib/billing";
+import {
+  buildBillingGatePayload,
+  buildPlanLimitPayload,
+  getBillingGateMessage,
+  getWorkspaceBillingSummary,
+  isBillingStateActive,
+} from "@/lib/billing";
 import { toActionErrorState } from "@/lib/logger";
 import { createNotification, createNotifications } from "@/lib/notifications";
 import { requireAdminAccess } from "@/lib/permissions";
@@ -51,6 +57,18 @@ export async function inviteMember(_: ActionState, formData: FormData): Promise<
 
     const access = await requireAdminAccess();
     const billing = await getWorkspaceBillingSummary(access.userId);
+
+    if (!isBillingStateActive(billing.billing.status)) {
+      return {
+        success: false,
+        message: getBillingGateMessage("team_invites", billing.billing.status),
+        payload: buildBillingGatePayload({
+          feature: "team_invites",
+          status: billing.billing.status,
+          currentPlan: billing.billing.plan,
+        }),
+      };
+    }
 
     if (billing.usage.membersUsed >= billing.plan.limits.members) {
       return {

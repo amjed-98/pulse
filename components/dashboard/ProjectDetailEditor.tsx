@@ -20,6 +20,7 @@ import {
 import type {
   ActionState,
   ActivityItem,
+  BillingGatePayload,
   PlanLimitPayload,
   Profile,
   ProjectAssetWithUrl,
@@ -28,6 +29,7 @@ import type {
   ProjectTaskWithAssignee,
   ProjectWithMembers,
 } from "@/lib/types";
+import { BillingGateAlert } from "@/components/dashboard/BillingGateAlert";
 import { PlanLimitAlert } from "@/components/dashboard/PlanLimitAlert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -46,6 +48,18 @@ function getPlanLimitPayload(payload: ActionState["payload"]): PlanLimitPayload 
   }
 
   return payload as PlanLimitPayload;
+}
+
+function getBillingGatePayload(payload: ActionState["payload"]): BillingGatePayload | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+
+  if (payload.kind !== "billing_gate") {
+    return null;
+  }
+
+  return payload as BillingGatePayload;
 }
 
 interface ProjectDetailEditorProps {
@@ -124,6 +138,7 @@ export function ProjectDetailEditor({
   const coverAsset = assets.find((asset) => asset.asset_type === "cover") ?? null;
   const attachmentAssets = assets.filter((asset) => asset.asset_type === "attachment");
   const assetPlanLimitPayload = getPlanLimitPayload(assetState.payload);
+  const assetBillingGatePayload = getBillingGatePayload(assetState.payload);
 
   useEffect(() => {
     setSelectedMemberId(availableMembers[0]?.id ?? "");
@@ -777,6 +792,7 @@ export function ProjectDetailEditor({
             <div className="space-y-4">
               {canManage ? (
                 <>
+                  {assetBillingGatePayload ? <BillingGateAlert payload={assetBillingGatePayload} /> : null}
                   {assetPlanLimitPayload ? <PlanLimitAlert payload={assetPlanLimitPayload} /> : null}
                   <form
                     action={(formData) => {

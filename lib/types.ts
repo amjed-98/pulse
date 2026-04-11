@@ -9,6 +9,7 @@ export type NotificationType = "info" | "project" | "team" | "system";
 export type WorkspacePlan = "starter" | "growth" | "scale";
 export type WorkspaceBillingStatus = "active" | "past_due" | "trialing" | "canceled";
 export type PlanLimitResource = "projects" | "members" | "storage";
+export type BillingGateFeature = "attachments" | "team_invites";
 
 export interface Database {
   public: {
@@ -521,11 +522,30 @@ export interface PlanLimitPayload {
   limit: number;
 }
 
+export interface BillingGatePayload {
+  kind: "billing_gate";
+  feature: BillingGateFeature;
+  status: WorkspaceBillingStatus;
+  currentPlan: WorkspacePlan;
+  reason: "requires_active_subscription";
+}
+
 export interface WorkspaceBillingSummary {
   billing: WorkspaceBilling;
   plan: BillingPlanDefinition;
   usage: WorkspaceUsage;
   stripeConfigured: boolean;
+}
+
+export interface WorkspaceInvoiceSummary {
+  id: string;
+  number: string | null;
+  status: string | null;
+  currency: string;
+  amountPaid: number;
+  createdAt: string;
+  hostedInvoiceUrl: string | null;
+  invoicePdfUrl: string | null;
 }
 
 export interface CurrentWorkspaceAccess {
@@ -571,7 +591,7 @@ export interface ActionState {
   message?: string;
   errorId?: string;
   fieldErrors?: Record<string, string[] | undefined>;
-  payload?: Json | PlanLimitPayload;
+  payload?: Json | PlanLimitPayload | BillingGatePayload;
 }
 
 export interface AuthFormState extends ActionState {

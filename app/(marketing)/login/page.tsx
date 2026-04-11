@@ -1,6 +1,8 @@
+import { headers } from "next/headers";
 import type { Metadata } from "next";
 
 import { LoginForm } from "@/components/auth/LoginForm";
+import { resolveRequestOrigin } from "@/lib/site-url";
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
@@ -12,9 +14,11 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; ref?: string }>;
+  searchParams: Promise<{ error?: string; ref?: string; next?: string }>;
 }) {
-  const { error, ref } = await searchParams;
+  const headersList = await headers();
+  const siteUrl = resolveRequestOrigin(headersList);
+  const { error, ref, next } = await searchParams;
   const errorMessage =
     error === "auth_callback_failed"
       ? `We could not complete sign-in from the authentication callback.${ref ? ` Reference: ${ref}` : ""}`
@@ -46,7 +50,7 @@ export default async function LoginPage({
           {errorMessage ? (
             <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{errorMessage}</div>
           ) : null}
-          <LoginForm />
+          <LoginForm next={next ?? null} siteUrl={siteUrl} />
         </div>
       </div>
     </main>

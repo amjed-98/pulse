@@ -45,7 +45,13 @@ export default async function AnalyticsPage({
           <h1 className="mt-2 text-3xl font-semibold text-slate-950">Usage and revenue signals</h1>
           <p className="mt-2 text-sm text-slate-500">Review performance trends across the last {range} days.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <a
+            href={`/api/export/analytics?range=${range}`}
+            className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
+          >
+            Export CSV
+          </a>
           {ranges.map((option) => (
             <Link
               key={option}

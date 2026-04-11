@@ -24,6 +24,36 @@ export function formatCurrency(value: number) {
   }).format(value);
 }
 
+export function formatMoney(value: number, currency = "USD") {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+export function formatFileSize(bytes: number) {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  const kb = bytes / 1024;
+
+  if (kb < 1024) {
+    return `${kb.toFixed(1)} KB`;
+  }
+
+  const mb = kb / 1024;
+
+  if (mb < 1024) {
+    return `${mb.toFixed(2)} MB`;
+  }
+
+  const gb = mb / 1024;
+  return `${gb.toFixed(2)} GB`;
+}
+
 export function formatNumber(value: number) {
   return new Intl.NumberFormat("en-US").format(value);
 }

@@ -5,7 +5,14 @@ import { z } from "zod";
 
 import { recordAnalyticsEvent } from "@/lib/analytics";
 import { createAuditLog } from "@/lib/audit";
-import { buildPlanLimitPayload, getStorageLimitBytes, getWorkspaceBillingSummary } from "@/lib/billing";
+import {
+  buildBillingGatePayload,
+  buildPlanLimitPayload,
+  getBillingGateMessage,
+  getStorageLimitBytes,
+  getWorkspaceBillingSummary,
+  isBillingStateActive,
+} from "@/lib/billing";
 import { toActionErrorState } from "@/lib/logger";
 import { createNotification, createNotifications } from "@/lib/notifications";
 import { requireCurrentWorkspaceAccess } from "@/lib/permissions";
@@ -720,6 +727,18 @@ export async function uploadProjectAsset(
 
     const billing = await getWorkspaceBillingSummary(access.userId);
     const storageLimitBytes = getStorageLimitBytes(billing.billing.plan);
+
+    if (!isBillingStateActive(billing.billing.status)) {
+      return {
+        success: false,
+        message: getBillingGateMessage("attachments", billing.billing.status),
+        payload: buildBillingGatePayload({
+          feature: "attachments",
+          status: billing.billing.status,
+          currentPlan: billing.billing.plan,
+        }),
+      };
+    }
 
     if (billing.usage.storageBytesUsed + assetFile.size > storageLimitBytes) {
       return {
