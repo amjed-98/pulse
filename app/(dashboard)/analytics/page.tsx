@@ -1,15 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { AnalyticsPresetActions } from "@/components/dashboard/AnalyticsPresetActions";
 import { AnalyticsCharts } from "@/components/dashboard/AnalyticsCharts";
+import { AnalyticsSavedViews } from "@/components/dashboard/AnalyticsSavedViews";
 import { DemoPreviewNotice } from "@/components/dashboard/DemoPreviewNotice";
 import { EmptyState } from "@/components/dashboard/EmptyState";
 import { WorkspaceSetupCard } from "@/components/dashboard/WorkspaceSetupCard";
 import { Button } from "@/components/ui/Button";
-import { filterEventsByDays, getWorkspaceAnalyticsEvents, getWorkspaceReadiness } from "@/lib/data";
+import { ANALYTICS_REPORT_PRESETS } from "@/lib/constants";
+import { filterEventsByCategory, filterEventsByDays, getAnalyticsSavedViews, getWorkspaceAnalyticsEvents, getWorkspaceReadiness } from "@/lib/data";
+import { publicEnv } from "@/lib/env";
 import { buildAnalyticsSeries, buildEventBreakdown, formatNumber } from "@/lib/utils";
 
 const ranges = [7, 30, 90] as const;
+const categories = ["all", "conversions", "projects", "team", "billing"] as const;
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
@@ -21,15 +26,33 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function AnalyticsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string }>;
+  searchParams: Promise<{ range?: string; category?: string; report?: string; view?: string }>;
 }) {
   const params = await searchParams;
-  const range = ranges.includes(Number(params.range) as (typeof ranges)[number])
-    ? (Number(params.range) as (typeof ranges)[number])
+  const savedViews = await getAnalyticsSavedViews();
+  const selectedView = savedViews.find((item) => item.id === params.view) ?? null;
+  const preset = ANALYTICS_REPORT_PRESETS.find((item) => item.id === params.report) ?? null;
+  const rangeValue = params.range ?? (selectedView ? String(selectedView.range) : preset ? String(preset.range) : undefined);
+  const categoryValue = params.category ?? selectedView?.category ?? preset?.category ?? "all";
+  const range = ranges.includes(Number(rangeValue) as (typeof ranges)[number])
+    ? (Number(rangeValue) as (typeof ranges)[number])
     : 30;
+  const category = categories.includes(categoryValue as (typeof categories)[number])
+    ? (categoryValue as (typeof categories)[number])
+    : "all";
+  const shareQuery = new URLSearchParams({
+    range: String(range),
+    category,
+  });
+
+  if (preset) {
+    shareQuery.set("report", preset.id);
+  }
+
+  const shareUrl = `${publicEnv.NEXT_PUBLIC_SITE_URL}/analytics?${shareQuery.toString()}`;
 
   const [allEvents, readiness] = await Promise.all([getWorkspaceAnalyticsEvents(), getWorkspaceReadiness()]);
-  const events = filterEventsByDays(allEvents, range);
+  const events = filterEventsByCategory(filterEventsByDays(allEvents, range), category);
   const series = buildAnalyticsSeries(events, range);
   const eventsByType = buildEventBreakdown(events);
   const totalEvents = events.length;
@@ -43,11 +66,14 @@ export default async function AnalyticsPage({
         <div>
           <p className="text-sm font-medium uppercase tracking-[0.25em] text-slate-400">Analytics</p>
           <h1 className="mt-2 text-3xl font-semibold text-slate-950">Usage and revenue signals</h1>
-          <p className="mt-2 text-sm text-slate-500">Review performance trends across the last {range} days.</p>
+          <p className="mt-2 text-sm text-slate-500">
+            Review {category === "all" ? "all event" : `${category}`} performance across the last {range} days.
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <AnalyticsPresetActions shareUrl={shareUrl} />
           <a
-            href={`/api/export/analytics?range=${range}`}
+            href={`/api/export/analytics?range=${range}&category=${category}`}
             className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
           >
             Export CSV
@@ -55,7 +81,7 @@ export default async function AnalyticsPage({
           {ranges.map((option) => (
             <Link
               key={option}
-              href={`/analytics?range=${option}`}
+              href={`/analytics?range=${option}&category=${category}`}
               className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${range === option
                   ? "bg-[var(--color-accent)] !text-white shadow-[var(--shadow-soft)] hover:bg-[var(--color-accent-strong)]"
                   : "border border-slate-300 bg-white text-slate-800 hover:border-slate-400 hover:bg-slate-50"
@@ -65,6 +91,52 @@ export default async function AnalyticsPage({
             </Link>
           ))}
         </div>
+      </section>
+
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        {ANALYTICS_REPORT_PRESETS.map((item) => {
+          const href = `/analytics?report=${item.id}&range=${item.range}&category=${item.category}`;
+          const isActive = preset?.id === item.id || (range === item.range && category === item.category);
+
+          return (
+            <Link
+              key={item.id}
+              href={href}
+              className={`rounded-[1.5rem] border p-4 transition ${
+                isActive ? "border-indigo-200 bg-indigo-50/70 shadow-[var(--shadow-soft)]" : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+              }`}
+            >
+              <p className="text-sm font-semibold text-slate-950">{item.label}</p>
+              <p className="mt-2 text-sm leading-6 text-slate-500">{item.description}</p>
+              <p className="mt-3 text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
+                {item.range}d • {item.category}
+              </p>
+            </Link>
+          );
+        })}
+      </section>
+
+      <AnalyticsSavedViews
+        views={savedViews}
+        currentRange={range}
+        currentCategory={category}
+        activeViewId={selectedView?.id ?? null}
+      />
+
+      <section className="flex flex-wrap gap-2">
+        {categories.map((option) => (
+          <Link
+            key={option}
+            href={`/analytics?range=${range}&category=${option}`}
+            className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+              category === option
+                ? "bg-slate-950 text-white"
+                : "border border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+            }`}
+          >
+            {option === "all" ? "All events" : option[0].toUpperCase() + option.slice(1)}
+          </Link>
+        ))}
       </section>
 
       <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">

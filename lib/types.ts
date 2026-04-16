@@ -79,6 +79,34 @@ export interface Database {
           },
         ];
       };
+      analytics_saved_views: {
+        Row: {
+          category: "all" | "conversions" | "projects" | "team" | "billing";
+          created_at: string;
+          id: string;
+          name: string;
+          owner_id: string;
+          range: 7 | 30 | 90;
+        };
+        Insert: {
+          category: "all" | "conversions" | "projects" | "team" | "billing";
+          created_at?: string;
+          id?: string;
+          name: string;
+          owner_id: string;
+          range: 7 | 30 | 90;
+        };
+        Update: Partial<Database["public"]["Tables"]["analytics_saved_views"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "analytics_saved_views_owner_id_fkey";
+            columns: ["owner_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       notifications: {
         Row: {
           created_at: string;
@@ -444,6 +472,7 @@ export type ProjectComment = Database["public"]["Tables"]["project_comments"]["R
 export type ProjectTask = Database["public"]["Tables"]["project_tasks"]["Row"];
 export type ProjectMilestone = Database["public"]["Tables"]["project_milestones"]["Row"];
 export type AnalyticsEvent = Database["public"]["Tables"]["analytics_events"]["Row"];
+export type AnalyticsSavedView = Database["public"]["Tables"]["analytics_saved_views"]["Row"];
 export type AuditLog = Database["public"]["Tables"]["audit_logs"]["Row"];
 export type WorkspaceInvite = Database["public"]["Tables"]["workspace_invites"]["Row"];
 export type WorkspaceBilling = Database["public"]["Tables"]["workspace_billing"]["Row"];

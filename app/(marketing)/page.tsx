@@ -30,21 +30,21 @@ export default async function MarketingPage() {
                 <path d="M4 8c3.2 0 3.2-4 6.4-4 3.2 0 3.2 8 6.4 8 1.6 0 2.4-1 3.2-2" />
               </svg>
             </div>
-            <div>
+            <div className="flex-1">
               <p className="text-lg font-semibold text-slate-950">Pulse</p>
               <p className="text-sm text-slate-500">Analytics OS</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Link href="/login" className="rounded-xl px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-white/70">
-              Login
+          <div className="flex">
+            <div className="flex items-center gap-3"> <Link href="/login" className="rounded-xl px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-white/70"> Login
             </Link>
-            <Link
-              href="/signup"
-              className="inline-flex h-11 items-center justify-center rounded-xl bg-[var(--color-accent)] px-4 text-sm font-medium !text-white shadow-[var(--shadow-soft)] transition hover:bg-[var(--color-accent-strong)]"
-            >
-              Start free
-            </Link>
+              <Link
+                href="/signup"
+                className="inline-flex h-11 items-center justify-center rounded-xl bg-[var(--color-accent)] px-4 text-sm font-medium !text-white shadow-[var(--shadow-soft)] transition hover:bg-[var(--color-accent-strong)]"
+              >
+                Start free
+              </Link>
+            </div>
           </div>
         </header>
 
@@ -55,7 +55,7 @@ export default async function MarketingPage() {
               Analytics and team operations, in one system
             </span>
             <div className="space-y-4">
-              <h1 className="max-w-2xl text-[clamp(3.25rem,6vw,5.5rem)] font-semibold leading-[0.94] tracking-[-0.06em] text-slate-950">
+              <h1 className="max-w-2xl text-[clamp(1rem,5vw,3rem)] font-semibold leading-[1.15] tracking-[-0.06em] text-slate-950">
                 Run projects, revenue, and team performance from a single command center.
               </h1>
               <p className="max-w-2xl text-lg leading-8 text-slate-600">

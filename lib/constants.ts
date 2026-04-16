@@ -118,6 +118,44 @@ export const BILLING_PLANS: Record<"starter" | "growth" | "scale", BillingPlanDe
   },
 };
 
+export const ANALYTICS_REPORT_PRESETS = [
+  {
+    id: "exec-weekly",
+    label: "Executive weekly",
+    description: "Short-window view for leadership check-ins and trend reviews.",
+    range: 7,
+    category: "all",
+  },
+  {
+    id: "conversion-watch",
+    label: "Conversion watch",
+    description: "Focus on conversion events and revenue-adjacent movement.",
+    range: 30,
+    category: "conversions",
+  },
+  {
+    id: "delivery-ops",
+    label: "Delivery ops",
+    description: "Project-heavy instrumentation for workflow and execution tracking.",
+    range: 30,
+    category: "projects",
+  },
+  {
+    id: "team-pulse",
+    label: "Team pulse",
+    description: "Invite and collaboration activity over a longer operating window.",
+    range: 90,
+    category: "team",
+  },
+  {
+    id: "billing-health",
+    label: "Billing health",
+    description: "Subscription, invoice, and billing-related events in one filtered view.",
+    range: 90,
+    category: "billing",
+  },
+] as const;
+
 const seedTeam: Profile[] = [
   {
     id: "4f067fd4-bffc-42df-8705-e715f6ea3834",

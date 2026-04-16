@@ -6,6 +6,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   ActivityItem,
   AnalyticsEvent,
+  AnalyticsSavedView,
   AuditLog,
   NotificationWithMeta,
   Profile,
@@ -93,6 +94,28 @@ export const getWorkspaceInvoiceHistory = cache(async (): Promise<WorkspaceInvoi
   }
 
   return getWorkspaceBillingInvoices(profile.id);
+});
+
+export const getAnalyticsSavedViews = cache(async (): Promise<AnalyticsSavedView[]> => {
+  const profile = await getCurrentProfile();
+
+  if (!profile) {
+    return [];
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("analytics_saved_views")
+    .select("*")
+    .eq("owner_id", profile.id)
+    .order("created_at", { ascending: false })
+    .limit(8);
+
+  if (error || !data?.length) {
+    return [];
+  }
+
+  return data;
 });
 
 export const getNotifications = cache(async (): Promise<NotificationWithMeta[]> => {
@@ -463,6 +486,31 @@ export function filterEventsByDays(events: AnalyticsEvent[], days: number) {
   cutoff.setDate(cutoff.getDate() - days);
 
   return events.filter((event) => new Date(event.recorded_at) >= cutoff);
+}
+
+export function filterEventsByCategory(
+  events: AnalyticsEvent[],
+  category: "all" | "conversions" | "projects" | "team" | "billing",
+) {
+  if (category === "all") {
+    return events;
+  }
+
+  return events.filter((event) => {
+    if (category === "conversions") {
+      return event.event_name.includes("conversion");
+    }
+
+    if (category === "projects") {
+      return event.event_name.startsWith("project_");
+    }
+
+    if (category === "team") {
+      return event.event_name.startsWith("team_") || event.event_name.includes("invite");
+    }
+
+    return event.event_name.includes("billing") || event.event_name.includes("subscription") || event.event_name.includes("invoice");
+  });
 }
 
 export function buildProjectMembers(projects: ProjectWithMembers[]): ProjectMember[] {
