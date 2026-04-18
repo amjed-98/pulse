@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { canExportProjectReport } from "@/lib/access";
 import {
   getProjectActivity,
   getProjectAssets,
@@ -9,6 +10,7 @@ import {
   getProjectTasks,
 } from "@/lib/data";
 import { buildProjectReport, buildProjectReportPdf } from "@/lib/export";
+import { createNotification } from "@/lib/notifications";
 import { createReportExportRecord } from "@/lib/report-exports";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -48,17 +50,38 @@ export async function GET(
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const { data: profile } = user
+    ? await supabase.from("profiles").select("role,full_name").eq("id", user.id).maybeSingle()
+    : { data: null as null };
 
-  if (user) {
-    await createReportExportRecord({
-      ownerId: user.id,
-      title: `${project.name} report`,
-      reportKind: "project",
-      format,
+  if (!user || !profile) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+
+  const access = { userId: user.id, role: profile.role };
+
+  if (!canExportProjectReport(project, access)) {
+    return NextResponse.json({ error: "You do not have access to export this project report." }, { status: 403 });
+  }
+
+  await createReportExportRecord({
+    ownerId: user.id,
+    title: `${project.name} report`,
+    reportKind: "project",
+    format,
+    projectId: project.id,
+    filters: {
       projectId: project.id,
-      filters: {
-        projectId: project.id,
-      },
+    },
+  });
+
+  if (project.owner_id !== user.id) {
+    await createNotification({
+      userId: project.owner_id,
+      title: "Project report exported",
+      message: `${profile.full_name ?? "A collaborator"} exported the ${project.name} report in ${format.toUpperCase()} format.`,
+      type: "project",
+      targetPath: `/projects/${project.id}`,
     });
   }
 

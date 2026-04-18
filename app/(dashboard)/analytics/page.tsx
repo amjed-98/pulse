@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { canExportAnalytics } from "@/lib/access";
 import { AnalyticsPresetActions } from "@/components/dashboard/AnalyticsPresetActions";
+import { ScheduledReports } from "@/components/dashboard/ScheduledReports";
 import { AnalyticsCharts } from "@/components/dashboard/AnalyticsCharts";
 import { AnalyticsSavedViews } from "@/components/dashboard/AnalyticsSavedViews";
 import { DemoPreviewNotice } from "@/components/dashboard/DemoPreviewNotice";
@@ -10,7 +12,7 @@ import { ReportExportsPanel } from "@/components/dashboard/ReportExportsPanel";
 import { WorkspaceSetupCard } from "@/components/dashboard/WorkspaceSetupCard";
 import { Button } from "@/components/ui/Button";
 import { ANALYTICS_REPORT_PRESETS } from "@/lib/constants";
-import { filterEventsByCategory, filterEventsByDays, getAnalyticsReportExports, getAnalyticsSavedViews, getWorkspaceAnalyticsEvents, getWorkspaceReadiness } from "@/lib/data";
+import { filterEventsByCategory, filterEventsByDays, getAnalyticsReportExports, getAnalyticsSavedViews, getCurrentProfile, getScheduledAnalyticsReportRuns, getScheduledAnalyticsReports, getWorkspaceAnalyticsEvents, getWorkspaceReadiness } from "@/lib/data";
 import { publicEnv } from "@/lib/env";
 import { buildAnalyticsSeries, buildEventBreakdown, formatNumber } from "@/lib/utils";
 
@@ -52,11 +54,15 @@ export default async function AnalyticsPage({
 
   const shareUrl = `${publicEnv.NEXT_PUBLIC_SITE_URL}/analytics?${shareQuery.toString()}`;
 
-  const [allEvents, readiness, reportExports] = await Promise.all([
+  const [allEvents, readiness, reportExports, profile, scheduledReports, scheduledRuns] = await Promise.all([
     getWorkspaceAnalyticsEvents(),
     getWorkspaceReadiness(),
     getAnalyticsReportExports(),
+    getCurrentProfile(),
+    getScheduledAnalyticsReports(),
+    getScheduledAnalyticsReportRuns(),
   ]);
+  const canExport = canExportAnalytics(profile?.role);
   const events = filterEventsByCategory(filterEventsByDays(allEvents, range), category);
   const series = buildAnalyticsSeries(events, range);
   const eventsByType = buildEventBreakdown(events);
@@ -76,19 +82,23 @@ export default async function AnalyticsPage({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <AnalyticsPresetActions shareUrl={shareUrl} />
-          <a
-            href={`/api/export/analytics?range=${range}&category=${category}`}
-            className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
-          >
-            Export CSV
-          </a>
-          <a
-            href={`/api/export/analytics?range=${range}&category=${category}&format=pdf`}
-            className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
-          >
-            Export PDF
-          </a>
+          {canExport ? (
+            <>
+              <AnalyticsPresetActions shareUrl={shareUrl} />
+              <a
+                href={`/api/export/analytics?range=${range}&category=${category}`}
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
+              >
+                Export CSV
+              </a>
+              <a
+                href={`/api/export/analytics?range=${range}&category=${category}&format=pdf`}
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
+              >
+                Export PDF
+              </a>
+            </>
+          ) : null}
           {ranges.map((option) => (
             <Link
               key={option}
@@ -134,12 +144,27 @@ export default async function AnalyticsPage({
         activeViewId={selectedView?.id ?? null}
       />
 
-      <ReportExportsPanel
-        title="Recent exports"
-        description="Every export is recorded so teams can rerun the same analytics package without rebuilding filters manually."
-        exports={reportExports}
-        emptyMessage="Exports appear here after you download CSV or PDF reports from this analytics view."
-      />
+      {canExport ? (
+        <ReportExportsPanel
+          title="Recent exports"
+          description="Every export is recorded so teams can rerun the same analytics package without rebuilding filters manually."
+          exports={reportExports}
+          emptyMessage="Exports appear here after you download CSV or PDF reports from this analytics view."
+        />
+      ) : (
+        <div className="rounded-[1.75rem] border border-dashed border-slate-200 bg-white/85 p-6 text-sm leading-6 text-slate-500 shadow-[var(--shadow-card)]">
+          Analytics exports are limited to members and admins. Viewer access can inspect live charts but cannot download workspace reports.
+        </div>
+      )}
+
+      {canExport ? (
+        <ScheduledReports
+          schedules={scheduledReports}
+          runs={scheduledRuns}
+          currentRange={range}
+          currentCategory={category}
+        />
+      ) : null}
 
       <section className="flex flex-wrap gap-2">
         {categories.map((option) => (

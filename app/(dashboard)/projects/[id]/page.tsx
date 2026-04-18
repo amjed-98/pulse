@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 
 import { ProjectDetailEditor } from "@/components/dashboard/ProjectDetailEditor";
 import { ReportExportsPanel } from "@/components/dashboard/ReportExportsPanel";
-import { canManageProject } from "@/lib/access";
+import { canExportProjectReport, canManageProject } from "@/lib/access";
 import {
   getCurrentProfile,
   getCurrentUser,
@@ -56,6 +56,7 @@ export default async function ProjectDetailPage({
 
   const canManage =
     user && profile ? canManageProject(project, { userId: user.id, role: profile.role }) : false;
+  const canExport = user && profile ? canExportProjectReport(project, { userId: user.id, role: profile.role }) : false;
   const availableMembers = allProfiles.filter((member) => !project.members.some((existing) => existing.id === member.id));
 
   return (
@@ -64,20 +65,22 @@ export default async function ProjectDetailPage({
         <div>
         <p className="text-sm font-medium uppercase tracking-[0.25em] text-slate-400">Project detail</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <a
-            href={`/api/export/projects/${project.id}`}
-            className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
-          >
-            Export Markdown
-          </a>
-          <a
-            href={`/api/export/projects/${project.id}?format=pdf`}
-            className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
-          >
-            Export PDF
-          </a>
-        </div>
+        {canExport ? (
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={`/api/export/projects/${project.id}`}
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
+            >
+              Export Markdown
+            </a>
+            <a
+              href={`/api/export/projects/${project.id}?format=pdf`}
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
+            >
+              Export PDF
+            </a>
+          </div>
+        ) : null}
       </div>
       <ProjectDetailEditor
         project={project}
@@ -90,12 +93,18 @@ export default async function ProjectDetailPage({
         tasks={tasks}
         comments={comments}
       />
-      <ReportExportsPanel
-        title="Recent project reports"
-        description="Project export history helps teams resend the same delivery package to clients without reconstructing the report every time."
-        exports={reportExports}
-        emptyMessage="Markdown and PDF project reports will appear here after the first export."
-      />
+      {canExport ? (
+        <ReportExportsPanel
+          title="Recent project reports"
+          description="Project export history helps teams resend the same delivery package to clients without reconstructing the report every time."
+          exports={reportExports}
+          emptyMessage="Markdown and PDF project reports will appear here after the first export."
+        />
+      ) : (
+        <div className="rounded-[1.75rem] border border-dashed border-slate-200 bg-white/85 p-6 text-sm leading-6 text-slate-500 shadow-[var(--shadow-card)]">
+          Project exports are restricted for viewers. Ask a project owner, member, or workspace admin to generate a client report.
+        </div>
+      )}
     </div>
   );
 }

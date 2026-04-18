@@ -23,12 +23,16 @@ import type {
   ProjectWithMembers,
   ReportExport,
   ReportExportWithMeta,
+  ScheduledReport,
+  ScheduledReportRun,
+  ScheduledReportRunWithMeta,
+  ScheduledReportWithMeta,
   WorkspaceInvite,
   WorkspaceBillingSummary,
   WorkspaceInvoiceSummary,
   WorkspaceReadiness,
 } from "@/lib/types";
-import { formatRelativeTime } from "@/lib/utils";
+import { formatDate, formatRelativeTime } from "@/lib/utils";
 
 function fallbackProjectMembers(projects: Project[]): ProjectWithMembers[] {
   return projects.map((project) => ({
@@ -119,6 +123,82 @@ export const getAnalyticsSavedViews = cache(async (): Promise<AnalyticsSavedView
   }
 
   return data;
+});
+
+export const getScheduledAnalyticsReports = cache(async (): Promise<ScheduledReportWithMeta[]> => {
+  const profile = await getCurrentProfile();
+
+  if (!profile) {
+    return [];
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("scheduled_reports")
+    .select("*")
+    .eq("owner_id", profile.id)
+    .eq("report_kind", "analytics")
+    .order("created_at", { ascending: false })
+    .limit(8);
+
+  if (error || !data?.length) {
+    return [];
+  }
+
+  return data.map((report: ScheduledReport) => ({
+    ...report,
+    relativeTime: formatRelativeTime(report.created_at),
+    nextRunLabel: formatDate(report.next_run_at, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }),
+    lastSentLabel: report.last_sent_at
+      ? formatDate(report.last_sent_at, {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        })
+      : null,
+  }));
+});
+
+export const getScheduledAnalyticsReportRuns = cache(async (): Promise<ScheduledReportRunWithMeta[]> => {
+  const profile = await getCurrentProfile();
+
+  if (!profile) {
+    return [];
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("scheduled_report_runs")
+    .select("*")
+    .eq("owner_id", profile.id)
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  if (error || !data?.length) {
+    return [];
+  }
+
+  return data.map((run: ScheduledReportRun) => ({
+    ...run,
+    relativeTime: formatRelativeTime(run.created_at),
+    deliveredLabel: run.delivered_at
+      ? formatDate(run.delivered_at, {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        })
+      : null,
+  }));
 });
 
 export const getAnalyticsReportExports = cache(async (): Promise<ReportExportWithMeta[]> => {

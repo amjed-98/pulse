@@ -12,6 +12,9 @@ export type PlanLimitResource = "projects" | "members" | "storage";
 export type BillingGateFeature = "attachments" | "team_invites";
 export type ReportKind = "analytics" | "project";
 export type ReportFormat = "csv" | "pdf" | "md";
+export type ScheduledReportCadence = "weekly" | "monthly";
+export type ScheduledReportRunStatus = "delivered" | "failed";
+export type ScheduledReportDeliveryMode = "manual" | "scheduled";
 
 export interface Database {
   public: {
@@ -144,6 +147,95 @@ export interface Database {
             columns: ["project_id"];
             isOneToOne: false;
             referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      scheduled_reports: {
+        Row: {
+          active: boolean;
+          cadence: ScheduledReportCadence;
+          category: "all" | "conversions" | "projects" | "team" | "billing";
+          created_at: string;
+          format: "csv" | "pdf";
+          id: string;
+          last_sent_at: string | null;
+          name: string;
+          next_run_at: string;
+          owner_id: string;
+          range: 7 | 30 | 90;
+          recipient_email: string;
+          report_kind: "analytics";
+        };
+        Insert: {
+          active?: boolean;
+          cadence: ScheduledReportCadence;
+          category: "all" | "conversions" | "projects" | "team" | "billing";
+          created_at?: string;
+          format: "csv" | "pdf";
+          id?: string;
+          last_sent_at?: string | null;
+          name: string;
+          next_run_at: string;
+          owner_id: string;
+          range: 7 | 30 | 90;
+          recipient_email: string;
+          report_kind?: "analytics";
+        };
+        Update: Partial<Database["public"]["Tables"]["scheduled_reports"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_reports_owner_id_fkey";
+            columns: ["owner_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      scheduled_report_runs: {
+        Row: {
+          category: "all" | "conversions" | "projects" | "team" | "billing";
+          created_at: string;
+          delivered_at: string | null;
+          delivery_mode: ScheduledReportDeliveryMode;
+          error_message: string | null;
+          id: string;
+          owner_id: string;
+          range: 7 | 30 | 90;
+          recipient_email: string;
+          report_format: "csv" | "pdf";
+          schedule_id: string;
+          status: ScheduledReportRunStatus;
+        };
+        Insert: {
+          category: "all" | "conversions" | "projects" | "team" | "billing";
+          created_at?: string;
+          delivered_at?: string | null;
+          delivery_mode: ScheduledReportDeliveryMode;
+          error_message?: string | null;
+          id?: string;
+          owner_id: string;
+          range: 7 | 30 | 90;
+          recipient_email: string;
+          report_format: "csv" | "pdf";
+          schedule_id: string;
+          status: ScheduledReportRunStatus;
+        };
+        Update: Partial<Database["public"]["Tables"]["scheduled_report_runs"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_report_runs_owner_id_fkey";
+            columns: ["owner_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "scheduled_report_runs_schedule_id_fkey";
+            columns: ["schedule_id"];
+            isOneToOne: false;
+            referencedRelation: "scheduled_reports";
             referencedColumns: ["id"];
           },
         ];
@@ -515,6 +607,8 @@ export type ProjectMilestone = Database["public"]["Tables"]["project_milestones"
 export type AnalyticsEvent = Database["public"]["Tables"]["analytics_events"]["Row"];
 export type AnalyticsSavedView = Database["public"]["Tables"]["analytics_saved_views"]["Row"];
 export type ReportExport = Database["public"]["Tables"]["report_exports"]["Row"];
+export type ScheduledReport = Database["public"]["Tables"]["scheduled_reports"]["Row"];
+export type ScheduledReportRun = Database["public"]["Tables"]["scheduled_report_runs"]["Row"];
 export type AuditLog = Database["public"]["Tables"]["audit_logs"]["Row"];
 export type WorkspaceInvite = Database["public"]["Tables"]["workspace_invites"]["Row"];
 export type WorkspaceBilling = Database["public"]["Tables"]["workspace_billing"]["Row"];
@@ -569,6 +663,17 @@ export interface NotificationWithMeta extends Notification {
 export interface ReportExportWithMeta extends ReportExport {
   relativeTime: string;
   downloadPath: string;
+}
+
+export interface ScheduledReportWithMeta extends ScheduledReport {
+  relativeTime: string;
+  nextRunLabel: string;
+  lastSentLabel: string | null;
+}
+
+export interface ScheduledReportRunWithMeta extends ScheduledReportRun {
+  relativeTime: string;
+  deliveredLabel: string | null;
 }
 
 export interface BillingPlanDefinition {
