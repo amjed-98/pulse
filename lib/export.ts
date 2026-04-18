@@ -1,3 +1,5 @@
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+
 import type {
   ActivityItem,
   AnalyticsEvent,
@@ -7,7 +9,7 @@ import type {
   ProjectTaskWithAssignee,
   ProjectWithMembers,
 } from "@/lib/types";
-import { formatDate, formatFileSize } from "@/lib/utils";
+import { buildAnalyticsSeries, buildEventBreakdown, formatCurrency, formatDate, formatFileSize, formatNumber } from "@/lib/utils";
 
 function escapeCsvValue(value: string | number | null | undefined) {
   if (value === null || value === undefined) {
@@ -46,6 +48,165 @@ export function buildAnalyticsEventsCsv(events: AnalyticsEvent[]) {
       value: event.value,
     })),
   );
+}
+
+function getRevenueWeight(eventName: string) {
+  switch (eventName) {
+    case "conversion_recorded":
+      return 900;
+    case "project_completed":
+      return 480;
+    case "team_invited":
+      return 220;
+    case "project_created":
+      return 180;
+    case "project_member_added":
+      return 90;
+    default:
+      return 60;
+  }
+}
+
+function buildAnalyticsReportLines(events: AnalyticsEvent[], range: number, category: string) {
+  const series = buildAnalyticsSeries(events, range);
+  const eventsByType = buildEventBreakdown(events).slice(0, 8);
+  const totalEvents = events.length;
+  const uniqueUsers = new Set(events.map((event) => event.user_id)).size;
+  const estimatedRevenue = events.reduce(
+    (sum, event) => sum + Number(event.value) * getRevenueWeight(event.event_name),
+    0,
+  );
+  const conversionRate = totalEvents === 0
+    ? 0
+    : Math.round(
+        (events.filter((event) => event.event_name.includes("conversion")).length / totalEvents) * 1000,
+      ) / 10;
+
+  return [
+    "Pulse Analytics Report",
+    "",
+    `Range: Last ${range} days`,
+    `Category: ${category}`,
+    `Generated: ${formatDate(new Date().toISOString(), {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    })}`,
+    "",
+    "Summary",
+    `- Total events: ${formatNumber(totalEvents)}`,
+    `- Unique users: ${formatNumber(uniqueUsers)}`,
+    `- Estimated revenue: ${formatCurrency(estimatedRevenue)}`,
+    `- Conversion rate: ${conversionRate}%`,
+    "",
+    "Top event types",
+    ...(eventsByType.length > 0
+      ? eventsByType.map((item) => `- ${item.event}: ${formatNumber(item.total)}`)
+      : ["- No events in this range"]),
+    "",
+    "Daily trend",
+    ...(series.length > 0
+      ? series.map(
+          (item) =>
+            `- ${item.label}: ${formatNumber(item.users)} events, ${formatCurrency(item.revenue)} estimated revenue`,
+        )
+      : ["- No daily trend available"]),
+    "",
+    "Recent events",
+    ...(events.slice(0, 20).map(
+      (event) =>
+        `- ${formatDate(event.recorded_at, {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        })}: ${event.event_name} (${event.user_id}) value ${event.value}`,
+    ) || ["- No recent events available"]),
+  ];
+}
+
+async function buildTextPdfDocument(title: string, lines: string[]) {
+  const pdfDoc = await PDFDocument.create();
+  const pageSize: [number, number] = [612, 792];
+  const margin = 56;
+  const bodyFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const headingFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+  let page = pdfDoc.addPage(pageSize);
+  let { width, height } = page.getSize();
+  let y = height - margin;
+  const maxWidth = width - margin * 2;
+
+  const addPage = () => {
+    page = pdfDoc.addPage(pageSize);
+    ({ width, height } = page.getSize());
+    y = height - margin;
+  };
+
+  const drawWrappedLine = (text: string, fontSize: number, font = bodyFont, color = rgb(0.15, 0.18, 0.24)) => {
+    const words = text.split(/\s+/);
+    const lines: string[] = [];
+    let current = "";
+
+    for (const word of words) {
+      const candidate = current ? `${current} ${word}` : word;
+
+      if (font.widthOfTextAtSize(candidate, fontSize) <= maxWidth) {
+        current = candidate;
+        continue;
+      }
+
+      if (current) {
+        lines.push(current);
+      }
+
+      current = word;
+    }
+
+    if (current) {
+      lines.push(current);
+    }
+
+    const lineHeight = fontSize + 4;
+
+    for (const line of lines) {
+      if (y - lineHeight < margin) {
+        addPage();
+      }
+
+      page.drawText(line, {
+        x: margin,
+        y,
+        size: fontSize,
+        font,
+        color,
+      });
+      y -= lineHeight;
+    }
+  };
+
+  drawWrappedLine(title, 20, headingFont, rgb(0.05, 0.09, 0.2));
+  y -= 8;
+
+  for (const rawLine of lines) {
+    if (rawLine === "") {
+      y -= 8;
+      continue;
+    }
+
+    const isHeading = !rawLine.startsWith("- ") && !rawLine.includes(":") && rawLine === rawLine.trim();
+    drawWrappedLine(rawLine, isHeading ? 13 : 11, isHeading ? headingFont : bodyFont);
+  }
+
+  return pdfDoc.save();
+}
+
+export async function buildAnalyticsReportPdf(events: AnalyticsEvent[], range: number, category: string) {
+  const lines = buildAnalyticsReportLines(events, range, category);
+  return buildTextPdfDocument("Pulse Analytics Report", lines.slice(1));
 }
 
 export function buildProjectReport(params: {
@@ -122,4 +283,32 @@ ${activity.length > 0
     ? activity.map((entry) => `- ${entry.title} (${entry.timestamp})${entry.description ? `: ${entry.description}` : ""}`).join("\n")
     : "- No recent activity"}
 `;
+}
+
+export async function buildProjectReportPdf(params: {
+  project: ProjectWithMembers;
+  milestones: ProjectMilestone[];
+  tasks: ProjectTaskWithAssignee[];
+  comments: ProjectCommentWithAuthor[];
+  assets: ProjectAssetWithUrl[];
+  activity: ActivityItem[];
+}) {
+  const report = buildProjectReport(params);
+  const lines = report.split("\n").map((line) => {
+    if (line.startsWith("# ")) {
+      return line.slice(2);
+    }
+
+    if (line.startsWith("## ")) {
+      return line.slice(3);
+    }
+
+    if (line.startsWith("### ")) {
+      return line.slice(4);
+    }
+
+    return line;
+  });
+
+  return buildTextPdfDocument(`${params.project.name} Report`, lines);
 }

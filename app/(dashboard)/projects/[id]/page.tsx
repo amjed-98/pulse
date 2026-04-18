@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { ProjectDetailEditor } from "@/components/dashboard/ProjectDetailEditor";
+import { ReportExportsPanel } from "@/components/dashboard/ReportExportsPanel";
 import { canManageProject } from "@/lib/access";
 import {
   getCurrentProfile,
@@ -12,6 +13,7 @@ import {
   getProjectById,
   getProjectComments,
   getProjectMilestones,
+  getProjectReportExports,
   getProjectTasks,
 } from "@/lib/data";
 
@@ -35,7 +37,7 @@ export default async function ProjectDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [project, user, profile, allProfiles, activity, assets, milestones, tasks, comments] = await Promise.all([
+  const [project, user, profile, allProfiles, activity, assets, milestones, tasks, comments, reportExports] = await Promise.all([
     getProjectById(id),
     getCurrentUser(),
     getCurrentProfile(),
@@ -45,6 +47,7 @@ export default async function ProjectDetailPage({
     getProjectMilestones(id),
     getProjectTasks(id),
     getProjectComments(id),
+    getProjectReportExports(id),
   ]);
 
   if (!project) {
@@ -61,12 +64,20 @@ export default async function ProjectDetailPage({
         <div>
         <p className="text-sm font-medium uppercase tracking-[0.25em] text-slate-400">Project detail</p>
         </div>
-        <a
-          href={`/api/export/projects/${project.id}`}
-          className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
-        >
-          Export report
-        </a>
+        <div className="flex flex-wrap gap-2">
+          <a
+            href={`/api/export/projects/${project.id}`}
+            className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
+          >
+            Export Markdown
+          </a>
+          <a
+            href={`/api/export/projects/${project.id}?format=pdf`}
+            className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
+          >
+            Export PDF
+          </a>
+        </div>
       </div>
       <ProjectDetailEditor
         project={project}
@@ -78,6 +89,12 @@ export default async function ProjectDetailPage({
         milestones={milestones}
         tasks={tasks}
         comments={comments}
+      />
+      <ReportExportsPanel
+        title="Recent project reports"
+        description="Project export history helps teams resend the same delivery package to clients without reconstructing the report every time."
+        exports={reportExports}
+        emptyMessage="Markdown and PDF project reports will appear here after the first export."
       />
     </div>
   );

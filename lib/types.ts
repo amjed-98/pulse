@@ -10,6 +10,8 @@ export type WorkspacePlan = "starter" | "growth" | "scale";
 export type WorkspaceBillingStatus = "active" | "past_due" | "trialing" | "canceled";
 export type PlanLimitResource = "projects" | "members" | "storage";
 export type BillingGateFeature = "attachments" | "team_invites";
+export type ReportKind = "analytics" | "project";
+export type ReportFormat = "csv" | "pdf" | "md";
 
 export interface Database {
   public: {
@@ -103,6 +105,45 @@ export interface Database {
             columns: ["owner_id"];
             isOneToOne: false;
             referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      report_exports: {
+        Row: {
+          created_at: string;
+          filters: Json;
+          format: ReportFormat;
+          id: string;
+          owner_id: string;
+          project_id: string | null;
+          report_kind: ReportKind;
+          title: string;
+        };
+        Insert: {
+          created_at?: string;
+          filters?: Json;
+          format: ReportFormat;
+          id?: string;
+          owner_id: string;
+          project_id?: string | null;
+          report_kind: ReportKind;
+          title: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["report_exports"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "report_exports_owner_id_fkey";
+            columns: ["owner_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "report_exports_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
             referencedColumns: ["id"];
           },
         ];
@@ -473,6 +514,7 @@ export type ProjectTask = Database["public"]["Tables"]["project_tasks"]["Row"];
 export type ProjectMilestone = Database["public"]["Tables"]["project_milestones"]["Row"];
 export type AnalyticsEvent = Database["public"]["Tables"]["analytics_events"]["Row"];
 export type AnalyticsSavedView = Database["public"]["Tables"]["analytics_saved_views"]["Row"];
+export type ReportExport = Database["public"]["Tables"]["report_exports"]["Row"];
 export type AuditLog = Database["public"]["Tables"]["audit_logs"]["Row"];
 export type WorkspaceInvite = Database["public"]["Tables"]["workspace_invites"]["Row"];
 export type WorkspaceBilling = Database["public"]["Tables"]["workspace_billing"]["Row"];
@@ -522,6 +564,11 @@ export interface ProjectCommentWithAuthor extends ProjectComment {
 
 export interface NotificationWithMeta extends Notification {
   relativeTime: string;
+}
+
+export interface ReportExportWithMeta extends ReportExport {
+  relativeTime: string;
+  downloadPath: string;
 }
 
 export interface BillingPlanDefinition {

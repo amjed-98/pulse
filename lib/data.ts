@@ -2,6 +2,7 @@ import { cache } from "react";
 
 import { getWorkspaceBillingInvoices, getWorkspaceBillingSummary } from "@/lib/billing";
 import { SEED_DATA } from "@/lib/constants";
+import { buildReportExportPath } from "@/lib/report-exports";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   ActivityItem,
@@ -20,6 +21,8 @@ import type {
   ProjectTask,
   ProjectTaskWithAssignee,
   ProjectWithMembers,
+  ReportExport,
+  ReportExportWithMeta,
   WorkspaceInvite,
   WorkspaceBillingSummary,
   WorkspaceInvoiceSummary,
@@ -116,6 +119,33 @@ export const getAnalyticsSavedViews = cache(async (): Promise<AnalyticsSavedView
   }
 
   return data;
+});
+
+export const getAnalyticsReportExports = cache(async (): Promise<ReportExportWithMeta[]> => {
+  const profile = await getCurrentProfile();
+
+  if (!profile) {
+    return [];
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("report_exports")
+    .select("*")
+    .eq("owner_id", profile.id)
+    .eq("report_kind", "analytics")
+    .order("created_at", { ascending: false })
+    .limit(8);
+
+  if (error || !data?.length) {
+    return [];
+  }
+
+  return data.map((report: ReportExport) => ({
+    ...report,
+    relativeTime: formatRelativeTime(report.created_at),
+    downloadPath: buildReportExportPath(report),
+  }));
 });
 
 export const getNotifications = cache(async (): Promise<NotificationWithMeta[]> => {
@@ -427,6 +457,34 @@ export async function getProjectComments(projectId: string): Promise<ProjectComm
     ...comment,
     author: authorMap.get(comment.author_id) ?? null,
     relativeTime: formatRelativeTime(comment.created_at),
+  }));
+}
+
+export async function getProjectReportExports(projectId: string): Promise<ReportExportWithMeta[]> {
+  const profile = await getCurrentProfile();
+
+  if (!profile) {
+    return [];
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("report_exports")
+    .select("*")
+    .eq("owner_id", profile.id)
+    .eq("report_kind", "project")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false })
+    .limit(8);
+
+  if (error || !data?.length) {
+    return [];
+  }
+
+  return data.map((report: ReportExport) => ({
+    ...report,
+    relativeTime: formatRelativeTime(report.created_at),
+    downloadPath: buildReportExportPath(report),
   }));
 }
 

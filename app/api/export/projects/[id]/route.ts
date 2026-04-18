@@ -8,14 +8,17 @@ import {
   getProjectMilestones,
   getProjectTasks,
 } from "@/lib/data";
-import { buildProjectReport } from "@/lib/export";
+import { buildProjectReport, buildProjectReportPdf } from "@/lib/export";
+import { createReportExportRecord } from "@/lib/report-exports";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const { searchParams } = new URL(request.url);
   const { id } = await params;
   const [project, activity, assets, milestones, tasks, comments] = await Promise.all([
     getProjectById(id),
@@ -40,6 +43,44 @@ export async function GET(
   });
 
   const safeName = project.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  const format = searchParams.get("format") === "pdf" ? "pdf" : "md";
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    await createReportExportRecord({
+      ownerId: user.id,
+      title: `${project.name} report`,
+      reportKind: "project",
+      format,
+      projectId: project.id,
+      filters: {
+        projectId: project.id,
+      },
+    });
+  }
+
+  if (format === "pdf") {
+    const pdf = await buildProjectReportPdf({
+      project,
+      activity,
+      assets,
+      milestones,
+      tasks,
+      comments,
+    });
+
+    return new NextResponse(Buffer.from(pdf), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${safeName || "project"}-report.pdf"`,
+        "Cache-Control": "no-store",
+      },
+    });
+  }
 
   return new NextResponse(report, {
     status: 200,
